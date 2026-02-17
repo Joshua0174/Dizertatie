@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models; // <--- Acum va merge sigur
 using System.Text;
-
+using System.Text.Json.Serialization;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. DATABASE
@@ -37,15 +37,19 @@ builder.Services.AddAuthentication(options => {
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ValidateIssuer = false,
         ValidateAudience = false,
-        ValidateLifetime = true
+        ValidateLifetime = true,
+        RoleClaimType="Role"
     };
 });
 
 // 4. SERVICES
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICitizenDocumentService, CitizenDocumentService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHostedService<TokenCleanupWorker>();
+
+
 // 5. SWAGGER CONFIG (Clasic)
 builder.Services.AddSwaggerGen(c =>
 {

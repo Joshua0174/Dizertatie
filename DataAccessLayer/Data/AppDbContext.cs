@@ -18,6 +18,10 @@ namespace DataAccessLayer.Data
         public DbSet<OfficialProfile> OfficialProfiles { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+        public DbSet<CitizenDocument> CitizenDocuments { get; set; }
+
+
         // Aici configurăm regulile speciale ale bazei de date
         protected override void OnModelCreating(ModelBuilder builder)
         {
