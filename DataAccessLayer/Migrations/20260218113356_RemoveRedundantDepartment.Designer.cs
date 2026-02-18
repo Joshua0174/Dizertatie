@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260214151135_AddRefreshTokenTable")]
-    partial class AddRefreshTokenTable
+    [Migration("20260218113356_RemoveRedundantDepartment")]
+    partial class RemoveRedundantDepartment
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -100,6 +100,60 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.CitizenDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("BlockChainBlockNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BlockChainTransactionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("DocumentTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ExpirationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsOnBlockChain")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UploadedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CitizenDocuments");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.CitizenProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -126,6 +180,53 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("CitizenProfiles");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.CompetencyProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CompetencyProfiles");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.DocumentType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("EffectiveDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpirationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("isActive")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DocumentTypes");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.OfficialProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -133,7 +234,10 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("NEWID()");
 
-                    b.Property<string>("Department")
+                    b.Property<Guid>("CompetencyProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EmployeeCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -147,10 +251,27 @@ namespace DataAccessLayer.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompetencyProfileId");
+
                     b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("OfficialProfiles");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.ProfileDocumentType", b =>
+                {
+                    b.Property<Guid>("CompetencyProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DocumentTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("CompetencyProfileId", "DocumentTypeId");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.ToTable("ProfileDocumentTypes");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.RefreshToken", b =>
@@ -323,6 +444,25 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.CitizenDocument", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.DocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DocumentType");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.CitizenProfile", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.AppUser", "User")
@@ -336,13 +476,40 @@ namespace DataAccessLayer.Migrations
 
             modelBuilder.Entity("DataAccessLayer.Entities.OfficialProfile", b =>
                 {
+                    b.HasOne("DataAccessLayer.Entities.CompetencyProfile", "CompetencyProfile")
+                        .WithMany("Officials")
+                        .HasForeignKey("CompetencyProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("DataAccessLayer.Entities.AppUser", "User")
                         .WithOne("OfficialProfile")
                         .HasForeignKey("DataAccessLayer.Entities.OfficialProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("CompetencyProfile");
+
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.ProfileDocumentType", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.CompetencyProfile", "CompetencyProfile")
+                        .WithMany("AllowedDocumentTypes")
+                        .HasForeignKey("CompetencyProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.DocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CompetencyProfile");
+
+                    b.Navigation("DocumentType");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.RefreshToken", b =>
@@ -412,6 +579,13 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("CitizenProfile");
 
                     b.Navigation("OfficialProfile");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.CompetencyProfile", b =>
+                {
+                    b.Navigation("AllowedDocumentTypes");
+
+                    b.Navigation("Officials");
                 });
 #pragma warning restore 612, 618
         }

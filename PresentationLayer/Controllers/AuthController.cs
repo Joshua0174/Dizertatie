@@ -31,18 +31,18 @@ namespace PresentationLayer.Controllers
         }
 
 
-        [HttpPost("create-clerk")]
-        public async Task<IActionResult> CreateClerk([FromBody] CreateOfficerDto createOfficerDto)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-            var result = await _authService.CreateOfficerAsync(createOfficerDto);
-            if (!result.Success)
-                return BadRequest(result.Errors);
-            return Ok(result);
-        }
+        //[HttpPost("create-clerk")]
+        //public async Task<IActionResult> CreateClerk([FromBody] CreateOfficerDto createOfficerDto)
+        //{
+        //    if (!ModelState.IsValid)
+        //    {
+        //        return BadRequest(ModelState);
+        //    }
+        //    var result = await _authService.CreateOfficerAsync(createOfficerDto);
+        //    if (!result.Success)
+        //        return BadRequest(result.Errors);
+        //    return Ok(result);
+        //}
 
 
         [HttpPost("login")]

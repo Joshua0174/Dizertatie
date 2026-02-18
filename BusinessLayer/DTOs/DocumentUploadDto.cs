@@ -13,6 +13,7 @@ namespace BusinessLayer.DTOs
     {
         [Required] public IFormFile File { get; set; }
         [Required] public string DocumentName{ get; set; }
-        
+
+        [Required] public Guid DocumentTypeId { get; set; }
     }
 }

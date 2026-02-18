@@ -45,6 +45,7 @@ builder.Services.AddAuthentication(options => {
 // 4. SERVICES
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICitizenDocumentService, CitizenDocumentService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHostedService<TokenCleanupWorker>();

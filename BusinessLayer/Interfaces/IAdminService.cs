@@ -1,0 +1,21 @@
+﻿using BusinessLayer.DTOs;
+using DataAccessLayer.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BusinessLayer.Interfaces
+{
+    public interface IAdminService
+    {
+        Task<DocumentType> CreateDocumentTypeAsync(CreateDocumentTypeDto dto);
+        Task<List<DocumentType>> GetAllDocumentTypesAsync();
+        Task<bool> ToggleDocumentTypeStatusAsync(Guid Id); //activare/dezactivare valabilitate doc
+
+        Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto);
+        Task<List<OfficialProfile>> GetAllOfficialAsync();
+    }
+}

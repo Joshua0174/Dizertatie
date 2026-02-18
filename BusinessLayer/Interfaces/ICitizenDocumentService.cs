@@ -10,7 +10,7 @@ namespace BusinessLayer.Interfaces
 {
     public interface ICitizenDocumentService
     {
-        Task<CitizenDocument> UploadDocumentAsync(string UserId, IFormFile file, string documentName);
+        Task<CitizenDocument> UploadDocumentAsync(string UserId, IFormFile file, string documentName, Guid documentTypeId);
         Task<List<CitizenDocument>> GetUserDocumentsAsync(string UserId);
 
         Task<CitizenDocument> GetDocumentByIdAsync(Guid documentId, string userId);

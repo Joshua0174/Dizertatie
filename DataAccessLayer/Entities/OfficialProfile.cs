@@ -11,11 +11,20 @@ namespace DataAccessLayer.Entities
 
         [Key]
         public Guid Id { get; set; }
+
         public string UserId { get; set; }
-        public string Institution { get; set; }
-        public string Department { get; set; }
 
         [ForeignKey("UserId")]
         public virtual AppUser User { get; set; }
+
+        public string Institution { get; set; }
+
+        // Aceasta este singura referință necesară către departament
+        public Guid CompetencyProfileId { get; set; }
+
+        [ForeignKey("CompetencyProfileId")]
+        public virtual CompetencyProfile CompetencyProfile { get; set; }
+
+        public string EmployeeCode { get; set; }
     }
 }

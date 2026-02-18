@@ -21,7 +21,9 @@ namespace DataAccessLayer.Data
 
         public DbSet<CitizenDocument> CitizenDocuments { get; set; }
 
-
+        public DbSet<DocumentType>DocumentTypes { get; set; }
+        public DbSet<CompetencyProfile> CompetencyProfiles { get; set; }
+        public DbSet<ProfileDocumentType> ProfileDocumentTypes { get; set; }
         // Aici configurăm regulile speciale ale bazei de date
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -51,6 +53,19 @@ namespace DataAccessLayer.Data
             builder.Entity<OfficialProfile>()
                 .Property(p => p.Id)
                 .HasDefaultValueSql("NEWID()");
+
+            builder.Entity<ProfileDocumentType>()
+            .HasKey(pt => new { pt.CompetencyProfileId, pt.DocumentTypeId });
+
+            builder.Entity<ProfileDocumentType>()
+            .HasOne(pt => pt.CompetencyProfile)
+            .WithMany(p => p.AllowedDocumentTypes)
+            .HasForeignKey(pt => pt.CompetencyProfileId);
+
+            builder.Entity<ProfileDocumentType>()
+                .HasOne(pt => pt.DocumentType)
+                .WithMany()
+                .HasForeignKey(pt => pt.DocumentTypeId);
         }
     }
 }

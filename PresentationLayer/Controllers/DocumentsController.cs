@@ -40,38 +40,54 @@ namespace PresentationLayer.Controllers
         }
 
         [HttpPost("upload")]
-        // Aici e schimbarea: primim UN SINGUR parametru [FromForm] care le conține pe ambele
         public async Task<IActionResult> UploadDocument([FromForm] DocumentUploadDto model)
         {
-            // Validare automată
+            // 1. Validare rapidă
             if (model.File == null || model.File.Length == 0)
             {
                 return BadRequest("Nu ai selectat niciun fișier.");
             }
 
+            // 2. Extragere UserId din Token
+            // Asigură-te că în Token-ul tău cheia este într-adevăr "Id" sau ClaimTypes.NameIdentifier
             var userId = User.FindFirst("Id")?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("Utilizatorul nu a putut fi identificat.");
+            }
 
             try
             {
-                // Atenție: trimitem model.File și model.DocumentName
-                var result = await _documentService.UploadDocumentAsync(userId, model.File, model.DocumentName);
+                // --- FIX-UL AICI: Adăugăm model.DocumentTypeId ca al 4-lea parametru ---
+                var result = await _documentService.UploadDocumentAsync(
+                    userId,
+                    model.File,
+                    model.DocumentName,
+                    model.DocumentTypeId // <--- Aceasta este cheia succesului acum
+                );
 
                 return Ok(new
                 {
                     Id = result.Id,
                     Name = result.Name,
+                    DocumentTypeId = result.DocumentTypeId,
                     FileType = result.FileType,
                     BlockchainHash = result.FileHash,
+                    Status = "Pending Blockchain",
                     Message = "Document salvat și convertit în PDF cu succes!"
                 });
             }
             catch (ArgumentException ex)
             {
+                // Erori de validare (ex: tip document invalid)
                 return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "A apărut o eroare internă.");
+                // Aici intră erorile de bază de date sau de scriere pe disk
+                // Loghează excepția ex pentru debugging dacă poți
+                return StatusCode(500, $"A apărut o eroare internă: {ex.Message}");
             }
         }
 
@@ -97,14 +113,28 @@ namespace PresentationLayer.Controllers
             // 3. Citim fișierul
             var fileBytes = await System.IO.File.ReadAllBytesAsync(document.FilePath);
 
-            // 4. Asigurăm extensia corectă (.pdf)
+            // --- PASUL DE DISERTAȚIE: Verificarea Integrității ---
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                var currentHashBytes = sha256.ComputeHash(fileBytes);
+                var currentHash = BitConverter.ToString(currentHashBytes).Replace("-", "").ToLowerInvariant();
+
+                if (currentHash != document.FileHash)
+                {
+                    // Dacă hash-ul nu coincide, înseamnă că fișierul a fost alterat pe server!
+                    return BadRequest("Atenție! Integritatea fișierului a fost compromisă. Documentul a fost modificat neautorizat pe server.");
+                }
+            }
+            // ----------------------------------------------------
+
+            // 4. Pregătim numele pentru download
             var downloadName = document.Name;
             if (!downloadName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             {
                 downloadName += ".pdf";
             }
 
-            // Returnăm fișierul cu Content-Type 'application/pdf' și numele corect
+            // Returnăm fișierul
             return File(fileBytes, "application/pdf", downloadName);
         }
     }

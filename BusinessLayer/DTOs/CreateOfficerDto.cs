@@ -22,7 +22,11 @@ namespace BusinessLayer.DTOs
         public string Institution { get; set; }
 
         [Required]
-        public string Department { get; set; }
+        public Guid CompetencyProfileId { get; set; }
+
+        [Required]
+        public string EmployeeCode { get; set; }
+
     }
     
 }
