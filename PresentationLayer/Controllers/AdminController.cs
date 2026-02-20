@@ -31,9 +31,9 @@ namespace PresentationLayer.Controllers
         }
 
         [HttpPut("document-types/{id}/toggle")]
-        public async Task<IActionResult> ToggleStatus(Guid Id)
+        public async Task<IActionResult> ToggleStatus(Guid id)
         {
-            var succes = await _adminService.ToggleDocumentTypeStatusAsync(Id);
+            var succes = await _adminService.ToggleDocumentTypeStatusAsync(id);
             if (!succes) return NotFound("Tipul documentului nu a fost gasit");
             return Ok("Statusul a fost actualizat cu succes.");
         } 

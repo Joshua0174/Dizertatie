@@ -53,22 +53,32 @@ namespace BusinessLayer.Services
 
         public async Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto)
         {
-            var user=new AppUser
+            // 1. Creăm userul
+            var user = new AppUser
             {
                 Email = dto.Email,
                 UserName = dto.Email,
                 FullName = dto.FullName,
-               // Role = UserRole.Official
+
+                // IMPORTANT: Aici setăm rolul direct!
+                Role = UserRole.Official
             };
 
-            var result=await _userManager.CreateAsync(user,dto.Password);
+            // 2. Îl salvăm în baza de date
+            var result = await _userManager.CreateAsync(user, dto.Password);
 
             if (!result.Succeeded)
-            { 
+            {
                 var errrors = string.Join(", ", result.Errors.Select(e => e.Description));
                 throw new Exception($"Failed to create user: {errrors}");
             }
-            await _userManager.AddToRoleAsync(user, "Official");
+
+            // --- ZONA CRITICĂ ---
+            // AICI NU TREBUIE SĂ EXISTE NIMIC legat de AddToRoleAsync!
+            // Dacă ai linia asta, ȘTERGE-O: await _userManager.AddToRoleAsync(user, "Official");
+            // --------------------
+
+            // 3. Creăm profilul
             var officialProfile = new OfficialProfile
             {
                 Id = Guid.NewGuid(),
@@ -77,8 +87,10 @@ namespace BusinessLayer.Services
                 CompetencyProfileId = dto.CompetencyProfileId,
                 EmployeeCode = dto.EmployeeCode
             };
+
             await _context.OfficialProfiles.AddAsync(officialProfile);
             await _context.SaveChangesAsync();
+
             return user;
         }
 

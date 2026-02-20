@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260217145334_AddInitialStructure")]
-    partial class AddInitialStructure
+    [Migration("20260218150806_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -199,6 +199,49 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("CompetencyProfiles");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.DocumentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CitizenId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DocumentPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("DocumentTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OfficialId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ResponseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CitizenId");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("OfficialId");
+
+                    b.ToTable("DocumentRequests");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.DocumentType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -236,10 +279,6 @@ namespace DataAccessLayer.Migrations
 
                     b.Property<Guid>("CompetencyProfileId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Department")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("EmployeeCode")
                         .IsRequired()
@@ -476,6 +515,33 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.DocumentRequest", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.AppUser", "Citizen")
+                        .WithMany()
+                        .HasForeignKey("CitizenId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.DocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.AppUser", "Official")
+                        .WithMany()
+                        .HasForeignKey("OfficialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Citizen");
+
+                    b.Navigation("DocumentType");
+
+                    b.Navigation("Official");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.OfficialProfile", b =>

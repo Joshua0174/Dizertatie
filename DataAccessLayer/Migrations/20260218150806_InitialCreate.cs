@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DataAccessLayer.Migrations
 {
     /// <inheritdoc />
-    public partial class AddInitialStructure : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -239,7 +239,6 @@ namespace DataAccessLayer.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
                     UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     Institution = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Department = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CompetencyProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     EmployeeCode = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
@@ -288,6 +287,43 @@ namespace DataAccessLayer.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_CitizenDocuments_DocumentTypes_DocumentTypeId",
+                        column: x => x.DocumentTypeId,
+                        principalTable: "DocumentTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DocumentRequests",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OfficialId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    CitizenId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    DocumentTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    RequestDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ResponseDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DocumentPath = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RejectionReason = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DocumentRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DocumentRequests_AspNetUsers_CitizenId",
+                        column: x => x.CitizenId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_DocumentRequests_AspNetUsers_OfficialId",
+                        column: x => x.OfficialId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_DocumentRequests_DocumentTypes_DocumentTypeId",
                         column: x => x.DocumentTypeId,
                         principalTable: "DocumentTypes",
                         principalColumn: "Id",
@@ -374,6 +410,21 @@ namespace DataAccessLayer.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_DocumentRequests_CitizenId",
+                table: "DocumentRequests",
+                column: "CitizenId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DocumentRequests_DocumentTypeId",
+                table: "DocumentRequests",
+                column: "DocumentTypeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DocumentRequests_OfficialId",
+                table: "DocumentRequests",
+                column: "OfficialId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_OfficialProfiles_CompetencyProfileId",
                 table: "OfficialProfiles",
                 column: "CompetencyProfileId");
@@ -418,6 +469,9 @@ namespace DataAccessLayer.Migrations
 
             migrationBuilder.DropTable(
                 name: "CitizenProfiles");
+
+            migrationBuilder.DropTable(
+                name: "DocumentRequests");
 
             migrationBuilder.DropTable(
                 name: "OfficialProfiles");

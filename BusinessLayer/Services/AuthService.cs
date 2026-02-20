@@ -25,49 +25,7 @@ namespace BusinessLayer.Services
             _configuration = configuration;
         }
 
-        //public async Task<AuthResult> CreateOfficerAsync(CreateOfficerDto createOfficerDto)
-        //{
-        //    //var existingUser = _userManager.FindByEmailAsync(createOfficerDto.Email).Result;
-
-        //    //if (existingUser != null)
-        //    //{
-        //    //    return new AuthResult
-        //    //    {
-        //    //        Success = false,
-        //    //        Errors = new List<string> { "Email already in use" }
-        //    //    };
-        //    //}
-
-        //    //var user = new AppUser
-        //    //{
-        //    //    Email = createOfficerDto.Email,
-        //    //    UserName = createOfficerDto.Email,
-        //    //    FullName = createOfficerDto.FullName,
-        //    //    Role = UserRole.Official
-        //    //};
-
-
-        //    //var result = await _userManager.CreateAsync(user, createOfficerDto.Password);
-        //    //if (!result.Succeeded)
-        //    //    return new AuthResult
-        //    //    {
-        //    //        Success = false,
-        //    //        Errors = result.Errors.Select(e => e.Description).ToList()
-        //    //    };
-        //    //var officialProfile = new OfficialProfile
-        //    //{
-        //    //    UserId = user.Id,
-        //    //    Institution = createOfficerDto.Institution,
-        //    //    Department = createOfficerDto.Department
-        //    //};
-        //    //await _context.OfficialProfiles.AddAsync(officialProfile);
-        //    //await _context.SaveChangesAsync();
-        //    return new AuthResult
-        //    {
-        //        Success = true,
-        //        Token = "Account Created Succesfully" // Nu generăm token la crearea oficialului, doar la login
-        //    };
-        //}
+        
 
         public async Task<AuthResult> LoginAsync(LoginDto loginDto)
         {
@@ -77,7 +35,7 @@ namespace BusinessLayer.Services
                 return new AuthResult
                 {
 
-                    Success = true,
+                    Success = false,
                     Errors = new List<string> { " Email sau parola invalida" }
                 };
 
@@ -155,7 +113,7 @@ namespace BusinessLayer.Services
 
         public async Task<AuthResult> RegisterCitizenAsync(RegisterCitizenDto registerDto)
         {
-            var existingUser = _userManager.FindByEmailAsync(registerDto.Email).Result;
+            var existingUser = await _userManager.FindByEmailAsync(registerDto.Email);
             if (existingUser != null)
                 return new AuthResult
                 {

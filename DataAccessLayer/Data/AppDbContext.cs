@@ -24,6 +24,9 @@ namespace DataAccessLayer.Data
         public DbSet<DocumentType>DocumentTypes { get; set; }
         public DbSet<CompetencyProfile> CompetencyProfiles { get; set; }
         public DbSet<ProfileDocumentType> ProfileDocumentTypes { get; set; }
+
+        public DbSet<DocumentRequest> DocumentRequests { get; set; }
+
         // Aici configurăm regulile speciale ale bazei de date
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -66,6 +69,21 @@ namespace DataAccessLayer.Data
                 .HasOne(pt => pt.DocumentType)
                 .WithMany()
                 .HasForeignKey(pt => pt.DocumentTypeId);
+
+
+            builder.Entity<DocumentRequest>()
+                    .HasOne(r => r.Official)
+                    .WithMany() // Nu avem nevoie de o listă inversă în AppUser momentan
+                    .HasForeignKey(r => r.OfficialId)
+                    .OnDelete(DeleteBehavior.Restrict); // <--- AICI E FIX-UL (Oprește ștergerea automată)
+
+            builder.Entity<DocumentRequest>()
+                .HasOne(r => r.Citizen)
+                .WithMany()
+                .HasForeignKey(r => r.CitizenId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
         }
     }
 }
