@@ -18,8 +18,8 @@ namespace DataAccessLayer.Entities
 
         public Guid InstitutionId { get; set; }
 
-        //[ForeignKey("InstitutionId")]
-        //public virtual Institution Institution { get; set; }
+        [ForeignKey("InstitutionId")]
+        public virtual Institution Institution { get; set; }
 
 
         public ICollection<OfficialProfile> Officials { get; set; }

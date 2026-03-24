@@ -36,12 +36,25 @@ namespace BusinessLayer.Services
        
         
 
-        public async Task<List<OfficialProfile>> GetAllOfficialAsync()
+        public async Task<List<OfficialProfileDto>> GetAllOfficialAsync()
         {
-              return await _context.OfficialProfiles.Include(o => o.User)
-                                                    .Include(o => o.CompetencyProfile)
-                                                    .Where(o => o.User.InstitutionId == GetCurrentInstitutionId())
-                                                    .ToListAsync();
+            var institutionId = GetCurrentInstitutionId();
+            if (institutionId == null) return new List<OfficialProfileDto>();
+
+            return await _context.OfficialProfiles
+                .Include(o => o.User)
+                .Include(o => o.CompetencyProfile)
+                .Where(o => o.User.InstitutionId == institutionId)
+                .Select(o => new OfficialProfileDto
+                {
+                    Id = o.Id,
+                    FullName = o.User.FullName,
+                    Email = o.User.Email,
+                    EmployeeCode = o.EmployeeCode,
+                    // Dacă funcționarul are profil, îi luăm numele, altfel punem N/A
+                    CompetencyProfileName = o.CompetencyProfile != null ? o.CompetencyProfile.Name : "N/A"
+                })
+                .ToListAsync();
         }
 
         public async Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto)
@@ -90,6 +103,87 @@ namespace BusinessLayer.Services
             return user;
         }
 
-        
+        public async Task<CompetencyProfile> CreateCompetencyProfileAsync(CreateCompetencyProfileDto dto)
+        {
+            var institutionId = GetCurrentInstitutionId();
+            if (institutionId == null) throw new Exception("Nu poți crea un profil fără instituție.");
+
+            // 1. Creăm profilul de bază
+            var profile = new CompetencyProfile
+            {
+                Id = Guid.NewGuid(),
+                Name = dto.Name,
+                Description = dto.Description,
+                InstitutionId = institutionId.Value
+            };
+
+            await _context.CompetencyProfiles.AddAsync(profile);
+
+            // 2. AICI E MAGIA: Legăm profilul de documentele pe care are voie să le ceară
+            if (dto.AllowedDocumentTypeIds != null && dto.AllowedDocumentTypeIds.Any())
+            {
+                foreach (var docTypeId in dto.AllowedDocumentTypeIds)
+                {
+                    var profileDoc = new ProfileDocumentType
+                    {
+                        CompetencyProfileId = profile.Id,
+                        DocumentTypeId = docTypeId
+                    };
+                    await _context.ProfileDocumentTypes.AddAsync(profileDoc);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return profile;
+        }
+
+        public async Task<List<CompetencyProfile>> GetCompetencyProfilesAsync()
+        {
+            var institutionId = GetCurrentInstitutionId();
+            if (institutionId == null) return new List<CompetencyProfile>();
+
+            return await _context.CompetencyProfiles
+                .Where(p => p.InstitutionId == institutionId.Value)
+                .ToListAsync();
+        }
+
+       
+        public async Task<PagedResult<DocumentTypeDto>> GetPagedSystemDocumentTypesAsync(int pageNumber, int pageSize, string searchTerm)
+        {
+            // 1. Luăm doar query-ul, FĂRĂ să aducem datele din baza de date încă
+            var query = _context.DocumentTypes.Where(d => d.isActive).AsQueryable();
+
+            // 2. Aplicăm filtrul de căutare direct pe server (SQL LIKE)
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+                query = query.Where(d => d.Name.ToLower().Contains(searchTerm) ||
+                                         (d.Description != null && d.Description.ToLower().Contains(searchTerm)));
+            }
+
+            // 3. Numărăm câte rezultate există în TOTAL (necesar pentru frontend ca să deseneze butoanele de pagini)
+            var totalCount = await query.CountAsync();
+
+            // 4. Aducem STRICT pagina pe care o vrem
+            var items = await query
+                .OrderBy(d => d.Name) // Întotdeauna trebuie să ordonezi înainte de Skip/Take!
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(d => new DocumentTypeDto
+                {
+                    Id = d.Id,
+                    Name = d.Name,
+                    Description = d.Description
+                })
+                .ToListAsync(); // Abia AICI se execută interogarea finală în baza de date!
+
+            return new PagedResult<DocumentTypeDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
     }
 }

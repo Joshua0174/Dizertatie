@@ -12,8 +12,10 @@ namespace BusinessLayer.Interfaces
     public interface IAdminService
     {
 
+        Task<CompetencyProfile> CreateCompetencyProfileAsync(CreateCompetencyProfileDto dto);
         Task<List<CompetencyProfile>> GetCompetencyProfilesAsync();
         Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto);
-        Task<List<OfficialProfile>> GetAllOfficialAsync();
+        Task<List<OfficialProfileDto>> GetAllOfficialAsync();
+        Task<PagedResult<DocumentTypeDto>> GetPagedSystemDocumentTypesAsync(int pageNumber, int pageSize, string searchTerm);
     }
 }
