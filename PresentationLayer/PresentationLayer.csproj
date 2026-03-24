@@ -20,8 +20,4 @@
 		<ProjectReference Include="..\DataAccessLayer\DataAccessLayer.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="Uploads\" />
-	</ItemGroup>
-
 </Project>

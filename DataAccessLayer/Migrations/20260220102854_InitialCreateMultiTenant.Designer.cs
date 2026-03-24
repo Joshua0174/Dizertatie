@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260218150806_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260220102854_InitialCreateMultiTenant")]
+    partial class InitialCreateMultiTenant
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -50,6 +50,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("InstitutionId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
@@ -88,6 +91,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InstitutionId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -270,6 +275,30 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("DocumentTypes");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.Institution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWID()");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CUI")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Institutions");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.OfficialProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -281,10 +310,6 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("EmployeeCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Institution")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -487,6 +512,16 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.AppUser", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.Institution", "Institution")
+                        .WithMany("Users")
+                        .HasForeignKey("InstitutionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Institution");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.CitizenDocument", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.DocumentType", "DocumentType")
@@ -656,6 +691,11 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("AllowedDocumentTypes");
 
                     b.Navigation("Officials");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.Institution", b =>
+                {
+                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }

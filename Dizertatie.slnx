@@ -2,4 +2,5 @@
   <Project Path="BusinessLayer/BusinessLayer.csproj" />
   <Project Path="DataAccessLayer/DataAccessLayer.csproj" />
   <Project Path="PresentationLayer/PresentationLayer.csproj" />
+  <Project Path="Tests/Tests.csproj" Id="f6ca2bc7-9bd2-427b-9ce1-48f2152b397e" />
 </Solution>

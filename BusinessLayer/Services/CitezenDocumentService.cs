@@ -55,6 +55,7 @@ namespace BusinessLayer.Services
             }
 
             // 3. HASH: Calculăm amprenta digitală SHA256 (Esențial pentru Blockchain)
+            // Calculăm hash-ul pe PDF-ul ORIGINAL, CURAT.
             string hash;
             using (var sha256 = SHA256.Create())
             {
@@ -71,23 +72,34 @@ namespace BusinessLayer.Services
                 Directory.CreateDirectory(folderPath);
             }
 
-            // 5. Salvare fișier pe disk (forțăm .pdf)
-            var uniqueFileName = $"{newDocumentId}.pdf";
+            // =======================================================
+            // 5. CRIPTAREA ȘI SALVAREA PE DISK (Securitate maximă)
+            // =======================================================
+
+            // Criptăm conținutul fișierului PDF cu AES-256
+            var encryptedBytes = EncryptionHelper.Encrypt(pdfBytes);
+
+            // Salvăm cu extensia .enc pentru a indica vizual că fișierul este sigilat criptografic
+            var uniqueFileName = $"{newDocumentId}.enc";
             var fullPath = Path.Combine(folderPath, uniqueFileName);
-            await File.WriteAllBytesAsync(fullPath, pdfBytes);
+
+            // Scriem pe disk varianta CRIPTATĂ (care e complet ilizibilă fără cheie)
+            await File.WriteAllBytesAsync(fullPath, encryptedBytes);
+
+            // =======================================================
 
             // 6. SALVARE ÎN BAZA DE DATE
             var document = new CitizenDocument
             {
                 Id = newDocumentId,
                 UserId = userId,
-                DocumentTypeId = documentTypeId, // FIX: Legătura cu nomenclatorul (GUID)
+                DocumentTypeId = documentTypeId,
                 Name = documentName,
-                FilePath = fullPath,
-                FileHash = hash,
-                FileType = "application/pdf",
+                FilePath = fullPath, // Salvăm calea către fișierul .enc
+                FileHash = hash,     // Hash-ul este cel al PDF-ului original
+                FileType = "application/pdf", // Pentru browser, el va rămâne un PDF la descărcare
                 UploadedDate = DateTime.UtcNow,
-                IsOnBlockChain = false // Va fi setat pe 'true' de worker-ul de Blockchain mai târziu
+                IsOnBlockChain = false
             };
 
             await _context.CitizenDocuments.AddAsync(document);

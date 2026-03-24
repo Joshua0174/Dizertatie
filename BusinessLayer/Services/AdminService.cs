@@ -2,8 +2,11 @@
 using BusinessLayer.Interfaces;
 using DataAccessLayer.Data;
 using DataAccessLayer.Entities;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Features.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,44 +18,37 @@ namespace BusinessLayer.Services
     public class AdminService : IAdminService
     {
         private readonly AppDbContext _context;
-        private readonly UserManager<AppUser> _userManager;
-        public AdminService(AppDbContext context, UserManager<AppUser> userManager)
+        private readonly UserManager<AppUser> _userManager; 
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public AdminService(AppDbContext context, UserManager<AppUser> userManager, IHttpContextAccessor httpContextAccessor)
         {
             _context = context; 
             _userManager = userManager;
-        }
-        public async Task<DocumentType> CreateDocumentTypeAsync(CreateDocumentTypeDto dto)
-        {
-            var newType = new DocumentType
-            {
-                Id = Guid.NewGuid(),
-                Name = dto.Name,
-                Description = dto.Description,
-                EffectiveDate = dto.EffectiveDate,
-                ExpirationDate = dto.ExpirationDate,
-                isActive = true
-            };
-
-            await _context.DocumentTypes.AddAsync(newType);
-            await _context.SaveChangesAsync();
-            return newType;
-
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<List<DocumentType>> GetAllDocumentTypesAsync()
-        {
-           return await _context.DocumentTypes.OrderBy(t => t.Name).ToListAsync();
+        private Guid? GetCurrentInstitutionId() { 
+        
+             var instIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("InstitutionId").Value;
+            if(string.IsNullOrEmpty(instIdClaim)) return null;
+            return Guid.Parse(instIdClaim);
         }
+       
+        
 
         public async Task<List<OfficialProfile>> GetAllOfficialAsync()
         {
               return await _context.OfficialProfiles.Include(o => o.User)
                                                     .Include(o => o.CompetencyProfile)
+                                                    .Where(o => o.User.InstitutionId == GetCurrentInstitutionId())
                                                     .ToListAsync();
         }
 
         public async Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto)
-        {
+        {  
+            var institutionId = GetCurrentInstitutionId();
+            if(institutionId == null) 
+                throw new Exception("Nu poti crea un functionar pentru ca nu esti asociat unei institutii.");
             // 1. Creăm userul
             var user = new AppUser
             {
@@ -61,7 +57,8 @@ namespace BusinessLayer.Services
                 FullName = dto.FullName,
 
                 // IMPORTANT: Aici setăm rolul direct!
-                Role = UserRole.Official
+                Role = UserRole.Official,
+                InstitutionId=institutionId
             };
 
             // 2. Îl salvăm în baza de date
@@ -83,7 +80,6 @@ namespace BusinessLayer.Services
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
-                Institution = dto.Institution,
                 CompetencyProfileId = dto.CompetencyProfileId,
                 EmployeeCode = dto.EmployeeCode
             };
@@ -94,15 +90,6 @@ namespace BusinessLayer.Services
             return user;
         }
 
-        public async Task<bool> ToggleDocumentTypeStatusAsync(Guid Id)
-        {
-            var docType = await _context.DocumentTypes.FindAsync(Id);
-            if (docType == null) return false;
-            
-            docType.isActive = !docType.isActive;
-            await _context.SaveChangesAsync();
-
-            return true;
-        } 
+        
     }
 }

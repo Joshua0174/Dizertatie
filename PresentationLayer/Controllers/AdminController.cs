@@ -8,7 +8,7 @@ namespace PresentationLayer.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles ="Admin")]
+    [Authorize(Roles ="InstitutionAdmin")]
     public class AdminController:ControllerBase
     {
         private readonly IAdminService _adminService;
@@ -16,45 +16,8 @@ namespace PresentationLayer.Controllers
         {
             _adminService = adminService;
         }
-        [HttpPost("document-types")]
-        public async Task<IActionResult> CreateType([FromBody] CreateDocumentTypeDto dto)
-        {
-            var result = await _adminService.CreateDocumentTypeAsync(dto);
-            return Ok(result);
-        }
-
-        [HttpGet("document-types")]
-        public async Task<IActionResult> GetAllTypes()
-        {
-            var result = await _adminService.GetAllDocumentTypesAsync();
-            return Ok(result);
-        }
-
-        [HttpPut("document-types/{id}/toggle")]
-        public async Task<IActionResult> ToggleStatus(Guid id)
-        {
-            var succes = await _adminService.ToggleDocumentTypeStatusAsync(id);
-            if (!succes) return NotFound("Tipul documentului nu a fost gasit");
-            return Ok("Statusul a fost actualizat cu succes.");
-        } 
-
-
-            [HttpGet("officials")]
-            public async Task<IActionResult> GetOfficials()
-            {
-             var officials = await _adminService.GetAllOfficialAsync();
-
-            var result = officials.Select(o => new {
-                    o.User.FullName,
-                    o.User.Email,
-                    o.Institution,
-                    DepartmentName = o.CompetencyProfile.Name,
-                    o.EmployeeCode
-                });
-            return Ok(result);
-        }
-
-
+        
+       
         [HttpPost("register-official")]
         public async Task<IActionResult> RegisterOfficial([FromBody] CreateOfficerDto dto)
         {

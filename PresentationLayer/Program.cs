@@ -1,13 +1,14 @@
 ﻿using BusinessLayer.Interfaces;
 using BusinessLayer.Services;
 using DataAccessLayer.Data;
-using DataAccessLayer.Entities; // Asigură-te că UserRole este aici
+using DataAccessLayer.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,7 +31,6 @@ builder.Services.AddIdentity<AppUser, IdentityRole>()
 // 3. CONFIGURARE JWT (Token Security)
 // ==========================================
 var secretKey = builder.Configuration["JwtConfig:Secret"];
-// Validare cheie secretă (să nu fie null)
 if (string.IsNullOrEmpty(secretKey))
 {
     throw new Exception("Cheia secretă JWT lipsește din appsettings.json!");
@@ -52,23 +52,41 @@ builder.Services.AddAuthentication(options => {
         ValidateIssuer = false,   // Simplificat pentru dev
         ValidateAudience = false, // Simplificat pentru dev
         ValidateLifetime = true,  // Verifică dacă token-ul a expirat
-        ClockSkew = TimeSpan.Zero, // Fără toleranță la expirare
+        ClockSkew = TimeSpan.Zero,
+        RoleClaimType = "Role"    // Caută permisiunile în câmpul "Role" din token
+    };
+    jwt.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            if (context.Request.Cookies.ContainsKey("jwt"))
+            {
+                context.Token = context.Request.Cookies["jwt"];
 
-        // FOARTE IMPORTANT: Aici spunem sistemului să caute permisiunile în câmpul "Role"
-        RoleClaimType = "Role"
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 
 // ==========================================
 // 4. INJECTARE SERVICII (DI)
 // ==========================================
+
+// MAGIC: Ne ajută să extragem InstitutionId din token-ul userului curent logat
+builder.Services.AddHttpContextAccessor();
+
+// Injectarea serviciilor standard
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICitizenDocumentService, CitizenDocumentService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IOfficialDocumentService, OfficialDocumentService>();
 builder.Services.AddScoped<ICitizenDocumentResponseService, CitizenDocumentResponseService>();
 
-// Worker pentru curățarea token-urilor expirate (background task)
+// Injectarea noului serviciu de SysAdmin creat mai devreme
+builder.Services.AddScoped<ISysAdminService, SysAdminService>();
+builder.Services.AddScoped<IDocumentTypesService, DocumentTypesService>();
+// Worker pentru curățarea token-urilor expirate
 builder.Services.AddHostedService<TokenCleanupWorker>();
 
 builder.Services.AddControllers();
@@ -81,7 +99,6 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Disertatie API", Version = "v1" });
 
-    // Definiția securității (Lacătul)
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Introdu token-ul JWT astfel: Bearer {token}",
@@ -110,85 +127,44 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("LoginLimit", httpContext =>
+    RateLimitPartition.GetFixedWindowLimiter(
+         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+         factory: partition => new FixedWindowRateLimiterOptions
+         {
+             PermitLimit = 5,
+             Window = TimeSpan.FromMinutes(1),
+             QueueLimit = 0,
+             AutoReplenishment=true
+         }
+        ));
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("https://localhost:5173") // Portul de la Vite/React
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // ESENȚIAL PENTRU COOKIES!
+    });
+});
+
 var app = builder.Build();
 
 // ==========================================
-// 6. SEEDING AUTOMAT (Creare Admin)
+// 6. SEEDING AUTOMAT (Apelează noua clasă)
 // ==========================================
-// Acest bloc rulează la fiecare pornire și verifică dacă există Admin
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
     try
     {
-        
-        var context = services.GetRequiredService<AppDbContext>();
-        var userManager = services.GetRequiredService<UserManager<AppUser>>();
-
-        // ------------------------------------------------------------
-        // PARTEA NOUĂ: SEED PENTRU DEPARTAMENTE (CompetencyProfiles)
-        // ------------------------------------------------------------
-        if (!await context.CompetencyProfiles.AnyAsync())
-        {
-            Console.WriteLine(">>> Seeding Departamente...");
-
-            var departamente = new List<CompetencyProfile>
-            {
-                new CompetencyProfile
-                { 
-                    // ID FIX: 1111... (Ușor de ținut minte)
-                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                    Name = "Urbanism",
-                    Description = "Emitere certificate urbanism și autorizații."
-                },
-                new CompetencyProfile
-                { 
-                    // ID FIX: 2222...
-                    Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                    Name = "Taxe și Impozite",
-                    Description = "Colectare taxe locale și amenzi."
-                },
-                new CompetencyProfile
-                { 
-                    // ID FIX: 3333...
-                    Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                    Name = "Stare Civilă",
-                    Description = "Evidența populației, căsătorii, nașteri."
-                }
-            };
-
-            await context.CompetencyProfiles.AddRangeAsync(departamente);
-            await context.SaveChangesAsync();
-            Console.WriteLine(">>> Departamente create cu succes!");
-        }
-
-        var adminEmail = "admin@local.com"; // Email-ul de Admin
-
-        var adminExists = await userManager.FindByEmailAsync(adminEmail);
-
-        if (adminExists == null)
-        {
-            var newAdmin = new AppUser
-            {
-                UserName = adminEmail,
-                Email = adminEmail,
-                FullName = "Super Administrator",
-                // AICI E ESENȚIAL: Setăm rolul direct din Enum
-                Role = UserRole.Admin
-            };
-
-            // Parola trebuie să fie complexă (Litere mari, mici, cifre, simboluri)
-            var result = await userManager.CreateAsync(newAdmin, "AdminPass123!");
-
-            if (result.Succeeded)
-            {
-                Console.WriteLine(">>> ADMIN CREAT CU SUCCES: admin@local.com / AdminPass123! <<<");
-            }
-            else
-            {
-                Console.WriteLine($">>> EROARE LA CREARE ADMIN: {string.Join(", ", result.Errors.Select(e => e.Description))} <<<");
-            }
-        }
+        // Apelăm metoda curată din clasa DbSeeder
+        await DataAccessLayer.Data.DbSeeder.SeedDataAsync(scope.ServiceProvider);
     }
     catch (Exception ex)
     {
@@ -205,12 +181,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRouting();
+app.UseRateLimiter();
 app.UseHttpsRedirection();
-
-// Ordinea este critică aici:
+app.UseCors("AllowFrontend");
 app.UseAuthentication(); // 1. Cine ești?
 app.UseAuthorization();  // 2. Ce ai voie să faci?
 
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

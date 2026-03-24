@@ -17,9 +17,7 @@ namespace DataAccessLayer.Entities
         [ForeignKey("UserId")]
         public virtual AppUser User { get; set; }
 
-        public string Institution { get; set; }
-
-        // Aceasta este singura referință necesară către departament
+       
         public Guid CompetencyProfileId { get; set; }
 
         [ForeignKey("CompetencyProfileId")]

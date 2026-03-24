@@ -11,10 +11,8 @@ namespace BusinessLayer.Interfaces
 {
     public interface IAdminService
     {
-        Task<DocumentType> CreateDocumentTypeAsync(CreateDocumentTypeDto dto);
-        Task<List<DocumentType>> GetAllDocumentTypesAsync();
-        Task<bool> ToggleDocumentTypeStatusAsync(Guid Id); //activare/dezactivare valabilitate doc
 
+        Task<List<CompetencyProfile>> GetCompetencyProfilesAsync();
         Task<AppUser> RegisterOfficialAsync(CreateOfficerDto dto);
         Task<List<OfficialProfile>> GetAllOfficialAsync();
     }

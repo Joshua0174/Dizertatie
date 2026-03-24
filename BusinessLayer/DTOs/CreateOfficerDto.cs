@@ -18,8 +18,7 @@ namespace BusinessLayer.DTOs
         [MinLength(6)]
         public string Password { get; set; }
 
-        [Required]
-        public string Institution { get; set; }
+        
 
         [Required]
         public Guid CompetencyProfileId { get; set; }

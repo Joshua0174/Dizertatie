@@ -1,4 +1,5 @@
 ﻿using BusinessLayer.DTOs; // <--- OBLIGATORIU: Aici e DTO-ul care rezolvă eroarea Swagger
+using BusinessLayer.Helpers;
 using BusinessLayer.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -96,7 +97,7 @@ namespace PresentationLayer.Controllers
         {
             var userId = User.FindFirst("Id")?.Value;
 
-            // 1. Căutăm documentul (Verificare drepturi)
+            // 1. Căutăm documentul (Verificare drepturi IDOR)
             var document = await _documentService.GetDocumentByIdAsync(id, userId);
 
             if (document == null)
@@ -110,13 +111,31 @@ namespace PresentationLayer.Controllers
                 return NotFound("Fișierul fizic nu a fost găsit pe server.");
             }
 
-            // 3. Citim fișierul
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(document.FilePath);
+            // 3. Citim fișierul CRIPTAT de pe disc (.enc)
+            var encryptedFileBytes = await System.IO.File.ReadAllBytesAsync(document.FilePath);
 
+            // =======================================================
+            // 3.1. DECRIPTAREA FIȘIERULUI ÎN MEMORIE
+            // =======================================================
+            byte[] decryptedPdfBytes;
+            try
+            {
+                // Transformăm fișierul indescifrabil înapoi în format PDF curat
+                decryptedPdfBytes = EncryptionHelper.Decrypt(encryptedFileBytes);
+            }
+            catch (Exception)
+            {
+                // Dacă fișierul e corupt sau cheia de criptare nu se potrivește
+                return StatusCode(500, "Eroare internă: Documentul nu a putut fi decriptat. Posibilă corupere a datelor.");
+            }
+
+            // =======================================================
             // --- PASUL DE DISERTAȚIE: Verificarea Integrității ---
+            // =======================================================
             using (var sha256 = System.Security.Cryptography.SHA256.Create())
             {
-                var currentHashBytes = sha256.ComputeHash(fileBytes);
+                // ATENȚIE: Calculăm hash-ul pe bytes-urile DECRIPTATE (PDF-ul real)
+                var currentHashBytes = sha256.ComputeHash(decryptedPdfBytes);
                 var currentHash = BitConverter.ToString(currentHashBytes).Replace("-", "").ToLowerInvariant();
 
                 if (currentHash != document.FileHash)
@@ -134,8 +153,8 @@ namespace PresentationLayer.Controllers
                 downloadName += ".pdf";
             }
 
-            // Returnăm fișierul
-            return File(fileBytes, "application/pdf", downloadName);
+            // 5. Returnăm fișierul DECRIPTAT către utilizator (browserul primește PDF-ul curat)
+            return File(decryptedPdfBytes, "application/pdf", downloadName);
         }
     }
 }

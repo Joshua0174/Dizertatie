@@ -11,7 +11,8 @@ namespace BusinessLayer.Interfaces
             Task<AuthResult> RegisterCitizenAsync(RegisterCitizenDto registerDto);
             
             Task<AuthResult> LoginAsync(LoginDto loginDto);
-            Task<AuthResult> RefreshTokenAsync(TokenRequestDto tokenRequestDto);
-          
+            Task<AuthResult> RefreshTokenAsync(string refreshToken);
+            Task<AuthResult> RevokeTokenAsync(string refreshToken);
+
     }
 }

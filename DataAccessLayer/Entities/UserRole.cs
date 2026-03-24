@@ -5,8 +5,9 @@ using System.Text;
 namespace DataAccessLayer.Entities
 {
     public enum UserRole
-    {
-        Admin,   //gestioneaza conturi pentru officials
+    {    
+        SysAdmin,     //gestioneaza conturi pentru InstitutionAdmin
+        InstitutionAdmin,   //gestioneaza conturi pentru officials
         Official, 
         Citizen
     }

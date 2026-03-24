@@ -1,4 +1,6 @@
-﻿using DataAccessLayer.Data;
+﻿using BusinessLayer.Interfaces;
+using DataAccessLayer.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,23 +8,20 @@ namespace PresentationLayer.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class DocumentTypesController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        public DocumentTypesController(AppDbContext context)
+        private readonly IDocumentTypesService _documentTypesService;
+        public DocumentTypesController(IDocumentTypesService documentTypesService)
         {
-            _context = context;
+            _documentTypesService = documentTypesService;
         }
 
         [HttpGet("for-dropdown")]
         [ResponseCache(Duration = 300)]
         public async Task<IActionResult> GetDocumentTypesForDropdown()
         {
-            var documentTypes = await _context.DocumentTypes
-                .Where(t => t.isActive)
-                .Select(t => new { t.Id, t.Name })
-                .ToListAsync();
-            
+            var documentTypes = await _documentTypesService.GetDocumentTypesForDropdownAsync();            
             return Ok(documentTypes);
         }
     }

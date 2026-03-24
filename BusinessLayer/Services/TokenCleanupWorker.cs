@@ -33,17 +33,20 @@ namespace BusinessLayer.Services
                     using (var scope = _serviceProvider.CreateScope())
                     {
                         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                        _logger.LogInformation(" Token Cleanup Worker: Checking for expired tokens...");
+                        _logger.LogInformation(" Token Cleanup Worker: Checking for expired, revoked or used tokens...");
+
+                        // Am adăugat condițiile pentru IsRevoked și IsUsed
                         var deletedCount = await context.RefreshTokens
-                            .Where(rt => rt.ExpiryDate < DateTime.UtcNow)
+                            .Where(rt => rt.ExpiryDate < DateTime.UtcNow || rt.IsRevoked || rt.IsUsed)
                             .ExecuteDeleteAsync(stoppingToken);
+
                         if (deletedCount > 0)
                         {
-                            _logger.LogInformation(" Token Cleanup Worker: Deleted {Count} expired tokens.", deletedCount);
+                            _logger.LogInformation(" Token Cleanup Worker: Deleted {Count} invalid tokens.", deletedCount);
                         }
                         else
                         {
-                            _logger.LogInformation(" Token Cleanup Worker: No expired tokens found.");
+                            _logger.LogInformation(" Token Cleanup Worker: No invalid tokens found.");
                         }
                     }
                 }
@@ -51,7 +54,7 @@ namespace BusinessLayer.Services
                 {
                     _logger.LogError(ex, "Error occurred while cleaning up expired tokens.");
                 }
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken); // Run every minute
+                await Task.Delay(TimeSpan.FromHours(24), stoppingToken); // Run every minute
             }
         }
     }

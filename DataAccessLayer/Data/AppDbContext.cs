@@ -27,6 +27,8 @@ namespace DataAccessLayer.Data
 
         public DbSet<DocumentRequest> DocumentRequests { get; set; }
 
+        public DbSet<Institution> Institutions { get; set; }
+
         // Aici configurăm regulile speciale ale bazei de date
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -83,7 +85,15 @@ namespace DataAccessLayer.Data
                 .HasForeignKey(r => r.CitizenId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.Entity<AppUser>()
+                   .HasOne(u => u.Institution)
+                   .WithMany(i => i.Users)
+                   .HasForeignKey(u => u.InstitutionId)
+                   .OnDelete(DeleteBehavior.Restrict); // Nu ștergem instituția dacă ștergem un user, și nici invers automat pentru a preveni erori
 
+            builder.Entity<Institution>()
+                .Property(i => i.Id)
+                .HasDefaultValueSql("NEWID()");
         }
     }
 }

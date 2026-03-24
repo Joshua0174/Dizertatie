@@ -41,14 +41,17 @@ namespace BusinessLayer.Services
 
             }
 
-            return await GenerateJwtToken(user);
+            //var roles = await _userManager.GetRolesAsync(user);
+            //var mainRole = roles.FirstOrDefault() ?? "Citizen";
+             return await GenerateJwtToken(user);
+
         }
 
-        public async Task<AuthResult> RefreshTokenAsync(TokenRequestDto tokenRequestDto)
+        public async Task<AuthResult> RefreshTokenAsync(string refreshToken)
         {
             // 1. Căutăm Refresh Token-ul în baza de date
             var storedToken = await _context.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.Token == tokenRequestDto.RefreshToken);
+                            .FirstOrDefaultAsync(rt => rt.Token == refreshToken); // <--- Am schimbat aici
 
             // 2. Verificăm dacă există
             if (storedToken == null)
@@ -73,10 +76,29 @@ namespace BusinessLayer.Services
             // 4. Verificăm dacă a fost deja folosit (Security: Replay Attack)
             if (storedToken.IsUsed)
             {
+                // Token-ul a mai fost folosit!
+                // Compromitem toate sesiunile active (token-uri nefolosite și nerevocate) ale acestui utilizator.
+
+                var allActiveUserTokens = await _context.RefreshTokens
+                    .Where(rt => rt.UserId == storedToken.UserId && !rt.IsRevoked && !rt.IsUsed)
+                    .ToListAsync();
+
+                foreach (var token in allActiveUserTokens)
+                {
+                    token.IsRevoked = true;
+                }
+
+                if (allActiveUserTokens.Any())
+                {
+                    _context.RefreshTokens.UpdateRange(allActiveUserTokens);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Returnăm un mesaj generic, dar îl forțăm pe utilizator să se logheze iar.
                 return new AuthResult
                 {
                     Success = false,
-                    Errors = new List<string> { "Refresh token already used" }
+                    Errors = new List<string> { "Activitate suspectă detectată. Din motive de securitate, te rugăm să te autentifici din nou." }
                 };
             }
 
@@ -151,6 +173,33 @@ namespace BusinessLayer.Services
 
         }
 
+        public async Task<AuthResult> RevokeTokenAsync(string refreshToken)
+        {
+            var storedToken =await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+            if (storedToken == null) {
+                return new AuthResult
+                {
+                    Success = false,
+                    Errors = new List<string> { "Refresh token does not exist" }
+                };
+            }
+            if (storedToken.IsRevoked)
+            {
+                return new AuthResult
+                {
+                    Success = false,
+                    Errors = new List<string> { "Refresh token already revoked" }
+                };
+            }
+            storedToken.IsRevoked = true;
+            _context.RefreshTokens.Update(storedToken);
+            await _context.SaveChangesAsync();
+
+            return new AuthResult
+            {
+                Success = true
+            };
+        }
         private async Task<AuthResult> GenerateJwtToken(AppUser user)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
@@ -169,13 +218,17 @@ namespace BusinessLayer.Services
 
             // 3. Definim ce informații punem în token (Claims)
             var claims = new List<Claim>
-    {
-        new Claim("Id", user.Id),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email),
-        new Claim(JwtRegisteredClaimNames.Sub, user.Email),
-        new Claim(JwtRegisteredClaimNames.Jti, tokenDescriptorId), // Folosim ID-ul generat sus
-        new Claim("Role", user.Role.ToString())
-    };
+                        {
+                            new Claim("Id", user.Id),
+                            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                            new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                            new Claim(JwtRegisteredClaimNames.Jti, tokenDescriptorId), // Folosim ID-ul generat sus
+                            new Claim("Role", user.Role.ToString())
+                        };
+            if (user.InstitutionId.HasValue)
+            {
+                claims.Add(new Claim("InstitutionId", user.InstitutionId.Value.ToString()));
+            }
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -206,7 +259,11 @@ namespace BusinessLayer.Services
             {
                 Success = true,
                 Token = jwtToken,
-                RefreshToken = refreshToken.Token
+                RefreshToken = refreshToken.Token,
+
+                // Adăugăm datele pentru React direct aici!
+                Role = user.Role.ToString(),
+                FullName = user.FullName
             };
         }
 

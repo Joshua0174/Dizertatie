@@ -11,6 +11,9 @@ namespace DataAccessLayer.Entities
 
         public string? BlockChainWalletAddress { get; set; }
 
+        public Guid? InstitutionId { get; set; }
+        public virtual Institution? Institution { get; set; }
+
         public virtual CitizenProfile? CitizenProfile { get; set; }
         public virtual OfficialProfile? OfficialProfile { get; set; }
     }
