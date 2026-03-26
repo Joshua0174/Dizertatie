@@ -10,8 +10,9 @@ namespace BusinessLayer.DTOs
     public class CreateDocumentRequestDto
     {
         [Required]
-        [EmailAddress]
-        public string CitizenEmail { get; set; }    
+        [StringLength(13, MinimumLength = 13, ErrorMessage = "CNP-ul trebuie să aibă exact 13 caractere.")]
+        public string CitizenCnp { get; set; } // Am schimbat din Email în CNP
+
         [Required]
         public Guid DocumentTypeId { get; set; }
 

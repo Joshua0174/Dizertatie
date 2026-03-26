@@ -1,4 +1,5 @@
-﻿using DataAccessLayer.Entities;
+﻿using BusinessLayer.DTOs;
+using DataAccessLayer.Entities;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
@@ -14,5 +15,11 @@ namespace BusinessLayer.Interfaces
         Task<List<CitizenDocument>> GetUserDocumentsAsync(string UserId);
 
         Task<CitizenDocument> GetDocumentByIdAsync(Guid documentId, string userId);
+
+
+        Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string citizenUserId, int pageNumber, int pageSize);
+
+        // 2. Procesează răspunsul cetățeanului (Aprobă + Încarcă Fișier SAU Respinge + Motiv)
+        Task<DocumentRequest> RespondToRequestAsync(RespondToRequestDto dto, string citizenUserId);
     }
 }

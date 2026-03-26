@@ -1,4 +1,5 @@
-﻿using BusinessLayer.Helpers;
+﻿using BusinessLayer.DTOs;
+using BusinessLayer.Helpers;
 using BusinessLayer.Interfaces;
 using DataAccessLayer.Data;
 using DataAccessLayer.Entities;
@@ -107,5 +108,106 @@ namespace BusinessLayer.Services
 
             return document;
         }
+
+        // ==============================================================================
+        // METODE NOI PENTRU COMUNICAREA CU FUNCȚIONARUL
+        // ==============================================================================
+
+        public async Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string citizenUserId, int pageNumber, int pageSize)
+        {
+            var query = _context.DocumentRequests
+                .Include(r => r.Official)
+                .Include(r => r.DocumentType)
+                .Where(r => r.CitizenId == citizenUserId)
+                .AsQueryable();
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(r => r.RequestDate)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new DocumentRequestResponseDto
+                {
+                    Id = r.Id,
+                    // Aici afișăm adresa/numele funcționarului ca să știe cetățeanul cine îi cere actul
+                    CitizenEmail = r.Official.Email,
+                    DocumentName = r.DocumentType.Name,
+                    Status = r.Status.ToString(),
+                    Date = r.RequestDate,
+                    RequestReason = r.RequestReason,
+                    RejectionReason = r.RejectionReason
+                })
+                .ToListAsync();
+
+            return new PagedResult<DocumentRequestResponseDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<DocumentRequest> RespondToRequestAsync(RespondToRequestDto dto, string citizenUserId)
+        {
+            var request = await _context.DocumentRequests
+                .FirstOrDefaultAsync(r => r.Id == dto.RequestId && r.CitizenId == citizenUserId);
+
+            if (request == null) throw new Exception("Cererea nu a fost găsită sau nu îți aparține.");
+            if (request.Status != RequestStatus.Pending) throw new Exception("Această cerere a primit deja un răspuns.");
+
+            request.ResponseDate = DateTime.UtcNow;
+
+            if (dto.IsApproved)
+            {
+                if (dto.DocumentFile == null || dto.DocumentFile.Length == 0)
+                    throw new Exception("Trebuie să încarci un document pentru a aproba cererea.");
+
+                // 1. Păstrăm standardul tău de securitate: Conversie la PDF
+                byte[] pdfBytes;
+                try
+                {
+                    pdfBytes = await PdfConversionHelper.ConvertToPdfAsync(dto.DocumentFile);
+                }
+                catch (Exception ex)
+                {
+                    throw new ArgumentException($"Eroare la procesarea fișierului: {ex.Message}");
+                }
+
+                // 2. Criptăm documentul exact ca la Portofelul Digital
+                var encryptedBytes = EncryptionHelper.Encrypt(pdfBytes);
+
+                // 3. Creăm un folder separat pentru răspunsurile la cereri (opțional, dar mai curat)
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "Requests", citizenUserId);
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                // 4. Salvăm fișierul fizic .enc
+                var uniqueFileName = $"{Guid.NewGuid()}.enc";
+                var fullPath = Path.Combine(folderPath, uniqueFileName);
+
+                await File.WriteAllBytesAsync(fullPath, encryptedBytes);
+
+                // 5. Actualizăm cererea
+                request.DocumentPath = fullPath;
+                request.Status = RequestStatus.Approved;
+            }
+            else
+            {
+                // Fluxul de respingere
+                if (string.IsNullOrWhiteSpace(dto.RejectionReason))
+                    throw new Exception("Trebuie să oferi un motiv pentru refuz.");
+
+                request.RejectionReason = dto.RejectionReason;
+                request.Status = RequestStatus.Rejected;
+            }
+
+            await _context.SaveChangesAsync();
+            return request;
+        }
+        
     }
 }

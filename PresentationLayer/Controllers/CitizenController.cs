@@ -9,11 +9,11 @@ namespace PresentationLayer.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Roles = "Citizen")] // Doar cetățenii au acces aici
-    public class DocumentsController : ControllerBase
+    public class CitizenController : ControllerBase
     {
         private readonly ICitizenDocumentService _documentService;
 
-        public DocumentsController(ICitizenDocumentService docService)
+        public CitizenController(ICitizenDocumentService docService)
         {
             _documentService = docService;
         }
@@ -156,5 +156,51 @@ namespace PresentationLayer.Controllers
             // 5. Returnăm fișierul DECRIPTAT către utilizator (browserul primește PDF-ul curat)
             return File(decryptedPdfBytes, "application/pdf", downloadName);
         }
+
+        // ==============================================================================
+        // ENDPOINT-URI NOI PENTRU CERERILE DE LA FUNCȚIONARI
+        // ==============================================================================
+
+        [HttpGet("my-requests")]
+        public async Task<IActionResult> GetMyRequests([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var citizenId = User.FindFirst("Id")?.Value;
+                if (string.IsNullOrEmpty(citizenId)) return Unauthorized("Nu ești logat.");
+
+                var result = await _documentService.GetPagedMyRequestsAsync(citizenId, page, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        [HttpPost("respond")]
+        public async Task<IActionResult> RespondToRequest([FromForm] RespondToRequestDto dto)
+        {
+            try
+            {
+                var citizenId = User.FindFirst("Id")?.Value;
+                if (string.IsNullOrEmpty(citizenId)) return Unauthorized("Nu ești logat.");
+
+                var result = await _documentService.RespondToRequestAsync(dto, citizenId);
+
+                return Ok(new
+                {
+                    Message = dto.IsApproved
+                        ? "Documentul tău a fost securizat și trimis către funcționar cu succes!"
+                        : "Cererea a fost respinsă și funcționarul a fost notificat.",
+                    Status = result.Status.ToString()
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
     }
 }

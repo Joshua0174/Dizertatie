@@ -41,7 +41,8 @@ namespace DataAccessLayer.Entities
         public string? DocumentPath { get; set; }
 
         // Motivul respingerii (opțional)
-        public string? RejectionReason { get; set; }
+        public string? RejectionReason { get; set; } 
+        public string? RequestReason { get; set; }
     }
 
     public enum RequestStatus
