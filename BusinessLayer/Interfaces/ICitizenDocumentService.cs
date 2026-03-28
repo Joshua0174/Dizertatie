@@ -21,5 +21,7 @@ namespace BusinessLayer.Interfaces
 
         // 2. Procesează răspunsul cetățeanului (Aprobă + Încarcă Fișier SAU Respinge + Motiv)
         Task<DocumentRequest> RespondToRequestAsync(RespondToRequestDto dto, string citizenUserId);
+
+        Task<CitizenStatsDto> GetCitizenStatsAsync(string citizenId);
     }
 }

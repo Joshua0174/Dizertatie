@@ -13,7 +13,7 @@ namespace BusinessLayer.Interfaces
     {
 
         // Înlocuiește Task<List<DocumentRequest>> GetMyRequestAsync... cu:
-        Task<object> SearchCitizenByCnpAsync(string cnp);
+        Task<CitizenSearchResponseDto> SearchCitizenByCnpAsync(string cnp);
         Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string officialUserId, int pageNumber, int pageSize);
         Task<DocumentRequest> SendRequestAsync(CreateDocumentRequestDto dto, string officialUserId);
         //Task<List<DocumentRequest>> GetMyRequestAsync(string officialUserId);

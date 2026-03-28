@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PresentationLayer.Hubs;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -143,11 +144,12 @@ builder.Services.AddRateLimiter(options =>
         ));
 });
 
+builder.Services.AddSignalR();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://localhost:5173") // Portul de la Vite/React
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173") // Portul de la Vite/React
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // ESENȚIAL PENTRU COOKIES!
@@ -189,7 +191,7 @@ app.UseAuthentication(); // 1. Cine ești?
 app.UseAuthorization();  // 2. Ce ai voie să faci?
 
 app.MapControllers();
-
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();
 
 public partial class Program { }

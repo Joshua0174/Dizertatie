@@ -2,6 +2,8 @@
 using BusinessLayer.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using PresentationLayer.Hubs;
 
 namespace PresentationLayer.Controllers
 {
@@ -11,9 +13,20 @@ namespace PresentationLayer.Controllers
     public class OfficialDocumentsController : ControllerBase
     {
         private readonly IOfficialDocumentService _service;
-        public OfficialDocumentsController(IOfficialDocumentService service)
+        private readonly IHubContext<NotificationHub> _hubContext;
+        public OfficialDocumentsController(IOfficialDocumentService service, IHubContext<NotificationHub> hubContext)
         {
             _service = service;
+            _hubContext = hubContext;
+        }
+
+        // Metodă helper pentru a extrage curat ID-ul din JWT
+        private string GetOfficialId()
+        {
+            var id = User.FindFirst("Id")?.Value;
+            if (string.IsNullOrEmpty(id))
+                throw new UnauthorizedAccessException("Token invalid sau utilizator nelogat.");
+            return id;
         }
 
         [HttpPost("send-request")]
@@ -21,14 +34,27 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                var officialId = User.FindFirst("Id")?.Value;
-                var request = await _service.SendRequestAsync(dto, officialId);
+                var request = await _service.SendRequestAsync(dto, GetOfficialId());
+
+                if (request.CitizenId != null)
+                {
+                    string targetGroup = request.CitizenId.ToString().ToLowerInvariant();
+
+                    await _hubContext.Clients.Group(targetGroup).SendAsync(
+                        "NewRequestReceived",
+                        new
+                        {
+                            Message = "Ai primit o nouă cerere de document!",
+                            DocumentTypeId = request.DocumentTypeId
+                        }
+                    );
+                }
+
                 return Ok(new { Message = "Cerere trimisa cu succes!", RequestId = request.Id });
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return StatusCode(403, new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
         [HttpGet("my-requests")]
@@ -36,16 +62,11 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                var officialId = User.FindFirst("Id")?.Value;
-                if (string.IsNullOrEmpty(officialId)) return Unauthorized("Nu ești logat.");
-
-                var result = await _service.GetPagedMyRequestsAsync(officialId, page, pageSize);
+                var result = await _service.GetPagedMyRequestsAsync(GetOfficialId(), page, pageSize);
                 return Ok(result);
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
         [HttpGet("search-citizen")]
@@ -53,33 +74,26 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(cnp)) return BadRequest("CNP-ul este obligatoriu.");
+                if (string.IsNullOrWhiteSpace(cnp))
+                    return BadRequest(new { Message = "CNP-ul este obligatoriu." });
 
                 var citizenInfo = await _service.SearchCitizenByCnpAsync(cnp);
                 return Ok(citizenInfo);
             }
-            catch (Exception ex)
-            {
-                return NotFound(new { Message = ex.Message });
-            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
-        // --- ENDPOINT-UL LIPSĂ (Pentru Checkbox-urile din React) ---
         [HttpGet("allowed-documents")]
         public async Task<IActionResult> GetAllowedDocuments()
         {
             try
             {
-                var officialId = User.FindFirst("Id")?.Value;
-                if (string.IsNullOrEmpty(officialId)) return Unauthorized("Nu ești logat.");
-
-                var documents = await _service.GetAllowedDocumentTypesAsync(officialId);
+                var documents = await _service.GetAllowedDocumentTypesAsync(GetOfficialId());
                 return Ok(documents);
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
 
         [HttpGet("download/{requestId}")]
@@ -87,18 +101,12 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                var officialId = User.FindFirst("Id")?.Value;
-                if (string.IsNullOrEmpty(officialId)) return Unauthorized("Nu ești logat.");
-
-                var result = await _service.DownloadRequestedDocumentAsync(requestId, officialId);
-
-                // Trimitem fișierul decriptat direct către browser
+                var result = await _service.DownloadRequestedDocumentAsync(requestId, GetOfficialId());
                 return File(result.FileBytes, "application/pdf", result.FileName);
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
         }
     }
 }

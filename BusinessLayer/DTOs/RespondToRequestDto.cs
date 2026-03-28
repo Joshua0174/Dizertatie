@@ -19,7 +19,7 @@ namespace BusinessLayer.DTOs
 
         // Fișierul efectiv (PDF/JPG). Folosim IFormFile pentru a-l putea salva pe disc.
         // Este opțional (?) pentru că, dacă dă Reject, nu va încărca niciun fișier.
-        public IFormFile? DocumentFile { get; set; }
+       
 
         // Motivul refuzului. Completat doar dacă IsApproved este false.
         public string? RejectionReason { get; set; }
