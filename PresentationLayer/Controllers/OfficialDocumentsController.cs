@@ -58,12 +58,11 @@ namespace PresentationLayer.Controllers
         }
 
         [HttpGet("my-requests")]
-        public async Task<IActionResult> GetRequests([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetRequests([FromQuery] int page = 1, [FromQuery] int pageSize = 6, [FromQuery] bool todayOnly = false)
         {
             try
             {
-                var result = await _service.GetPagedMyRequestsAsync(GetOfficialId(), page, pageSize);
-                return Ok(result);
+                var result = await _service.GetPagedMyRequestsAsync(GetOfficialId(), page, pageSize, todayOnly); return Ok(result);
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
@@ -107,6 +106,55 @@ namespace PresentationLayer.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
             catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
             catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetStats()
+        {
+            try
+            {
+                var stats = await _service.GetOfficialStatsAsync(GetOfficialId());
+                return Ok(stats);
+            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
+        // ==========================================
+        // 2. ENDPOINT NOU PENTRU ISTORIC DOSAR
+        // ==========================================
+        [HttpGet("citizen-history")]
+        public async Task<IActionResult> GetCitizenHistory([FromQuery] string cnp)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(cnp))
+                    return BadRequest(new { Message = "CNP-ul este obligatoriu." });
+
+                var history = await _service.GetCitizenHistoryAsync(GetOfficialId(), cnp);
+                return Ok(history);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+
+        [HttpPost("resolve/{requestId}")]
+        public async Task<IActionResult> ResolveRequest(Guid requestId)
+        {
+            try
+            {
+                var result = await _service.ResolveRequestAsync(requestId, GetOfficialId());
+
+                if (!result)
+                {
+                    return BadRequest(new { Message = "Cererea nu a putut fi soluționată (posibil a expirat sau nu vă aparține)." });
+                }
+
+                return Ok(new { Message = "Verificarea a fost finalizată cu succes. Documentul nu mai este accesibil." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
         }
     }
 }

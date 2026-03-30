@@ -18,7 +18,7 @@ namespace BusinessLayer.Services
             _context = context;
         }
 
-        public async Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string officialUserId, int pageNumber, int pageSize)
+        public async Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string officialUserId, int pageNumber, int pageSize, bool todayOnly = false)
         {
             var query = _context.DocumentRequests
                 .Include(r => r.Citizen)
@@ -26,8 +26,17 @@ namespace BusinessLayer.Services
                 .Where(r => r.OfficialId == officialUserId)
                 .AsNoTracking(); // OPTIMIZARE: AsNoTracking crește performanța pentru operațiunile de tip Read-Only
 
+            // 1. APLICĂ FILTRUL PENTRU ZIUA CURENTĂ (dacă a fost cerut din frontend)
+            if (todayOnly)
+            {
+                var todayStart = DateTime.UtcNow.Date; // Ora 00:00:00 UTC a zilei curente
+                query = query.Where(r => r.RequestDate >= todayStart);
+            }
+
+            // 2. CALCULEAZĂ TOTALUL (După ce am aplicat filtrul, ca să bată numărul de pagini cu realitatea)
             var totalCount = await query.CountAsync();
 
+            // 3. EXTRAGE DATELE PAGINATE
             var items = await query
                 .OrderByDescending(r => r.RequestDate)
                 .Skip((pageNumber - 1) * pageSize)
@@ -35,13 +44,17 @@ namespace BusinessLayer.Services
                 .Select(r => new DocumentRequestResponseDto
                 {
                     Id = r.Id,
+                    // AICI ESTE CORECTURA: Fără ".User", pentru că r.Citizen ESTE AppUser direct
+                    CitizenName = r.Citizen.FullName,
                     CitizenEmail = r.Citizen.Email,
+
                     DocumentName = r.DocumentType.Name,
                     Status = r.Status.ToString(),
                     Date = r.RequestDate,
                     RequestReason = r.RequestReason,
                     RejectionReason = r.RejectionReason,
-                    ResponseDate = r.ResponseDate
+                    ResponseDate = r.ResponseDate,
+                    DocumentTypeId = r.DocumentTypeId
                 })
                 .ToListAsync();
 
@@ -187,6 +200,95 @@ namespace BusinessLayer.Services
 
             string fileName = $"{request.DocumentType.Name}_{request.Citizen.Email}.pdf";
             return (decryptedPdfBytes, fileName);
+        }
+
+        // ==========================================
+        // 1. METODĂ NOUĂ PENTRU STATISTICI
+        // ==========================================
+        public async Task<OfficialStatsDto> GetOfficialStatsAsync(string officialUserId)
+        {
+            var query = _context.DocumentRequests.Where(r => r.OfficialId == officialUserId).AsNoTracking();
+
+            var timeLimit = DateTime.UtcNow.AddMinutes(-5);
+            var todayStart = DateTime.UtcNow.Date; // De la miezul nopții UTC
+            var queryToday = query.Where(r => r.RequestDate >= todayStart);
+
+            return new OfficialStatsDto
+            {
+                AllTime = new StatMetrics
+                {
+                    Total = await query.CountAsync(),
+                    Pending = await query.CountAsync(r => r.Status == RequestStatus.Pending),
+                    // NOU: Am adăugat verificarea pentru RequestStatus.Resolved
+                    Resolved = await query.CountAsync(r =>
+                        r.Status == RequestStatus.Rejected ||
+                        r.Status == RequestStatus.Resolved ||
+                        (r.Status == RequestStatus.Approved && r.ResponseDate != null && r.ResponseDate >= timeLimit)),
+                    Expired = await query.CountAsync(r =>
+                        r.Status == RequestStatus.Expired ||
+                        (r.Status == RequestStatus.Approved && r.ResponseDate != null && r.ResponseDate < timeLimit))
+                },
+                Today = new StatMetrics
+                {
+                    Total = await queryToday.CountAsync(),
+                    Pending = await queryToday.CountAsync(r => r.Status == RequestStatus.Pending),
+                    // NOU: Am adăugat verificarea pentru RequestStatus.Resolved
+                    Resolved = await queryToday.CountAsync(r =>
+                        r.Status == RequestStatus.Rejected ||
+                        r.Status == RequestStatus.Resolved ||
+                        (r.Status == RequestStatus.Approved && r.ResponseDate != null && r.ResponseDate >= timeLimit)),
+                    Expired = await queryToday.CountAsync(r =>
+                        r.Status == RequestStatus.Expired ||
+                        (r.Status == RequestStatus.Approved && r.ResponseDate != null && r.ResponseDate < timeLimit))
+                }
+            };
+        }
+
+        // ==========================================
+        // 2. METODĂ NOUĂ PENTRU ISTORIC DOSAR
+        // ==========================================
+        public async Task<List<CitizenHistoryDto>> GetCitizenHistoryAsync(string officialUserId, string cnp)
+        {
+            var citizenProfile = await _context.CitizenProfiles.FirstOrDefaultAsync(cp => cp.CNP == cnp);
+            if (citizenProfile == null)
+                throw new KeyNotFoundException("Cetățeanul nu a fost găsit.");
+
+            // Aduce istoricul cererilor făcute de ACEST funcționar (sau de instituția lui, în funcție de regula de business. Aici am lăsat doar cererile lui).
+            var history = await _context.DocumentRequests
+                .Include(r => r.DocumentType)
+                .Where(r => r.CitizenId == citizenProfile.UserId && r.OfficialId == officialUserId)
+                .OrderByDescending(r => r.RequestDate)
+                .AsNoTracking()
+                .Select(r => new CitizenHistoryDto
+                {
+                    Id = r.Id,
+                    DocumentName = r.DocumentType.Name,
+                    Status = r.Status.ToString(),
+                    Date = r.RequestDate,
+                    RejectionReason = r.RejectionReason
+                })
+                .ToListAsync();
+
+            return history;
+        }
+
+        public async Task<bool> ResolveRequestAsync(Guid requestId, string officialUserId)
+        {
+            var request = await _context.DocumentRequests
+                .FirstOrDefaultAsync(r => r.Id == requestId && r.OfficialId == officialUserId);
+
+            if (request == null) return false;
+
+            // Doar cererile 'Approved' care nu au expirat încă pot fi soluționate
+            if (request.Status != RequestStatus.Approved) return false;
+
+            request.Status = RequestStatus.Resolved;
+
+            // IMPORTANT: Ștergem calea către fișier pentru a bloca accesul definitiv după vizualizare
+            request.DocumentPath = null;
+
+            await _context.SaveChangesAsync();
+            return true;
         }
     }
 }

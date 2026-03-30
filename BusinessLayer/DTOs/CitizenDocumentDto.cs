@@ -14,5 +14,8 @@ namespace BusinessLayer.DTOs
         public DateTime UploadedDate { get; set; }
         public string FileHash { get; set; }
         public Guid DocumentTypeId { get; set; }
+
+        public string Category { get; set; }
+        public bool AllowMultiple { get; set; }
     }
 }

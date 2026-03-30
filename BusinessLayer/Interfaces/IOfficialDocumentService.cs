@@ -14,7 +14,7 @@ namespace BusinessLayer.Interfaces
 
         // Înlocuiește Task<List<DocumentRequest>> GetMyRequestAsync... cu:
         Task<CitizenSearchResponseDto> SearchCitizenByCnpAsync(string cnp);
-        Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string officialUserId, int pageNumber, int pageSize);
+        Task<PagedResult<DocumentRequestResponseDto>> GetPagedMyRequestsAsync(string officialUserId, int pageNumber, int pageSize, bool todayOnly = false);
         Task<DocumentRequest> SendRequestAsync(CreateDocumentRequestDto dto, string officialUserId);
         //Task<List<DocumentRequest>> GetMyRequestAsync(string officialUserId);
 
@@ -23,6 +23,8 @@ namespace BusinessLayer.Interfaces
         // Adaugă asta lângă celelalte metode
         Task<(byte[] FileBytes, string FileName)> DownloadRequestedDocumentAsync(Guid requestId, string officialUserId);
 
-
+        Task<OfficialStatsDto> GetOfficialStatsAsync(string officialUserId);
+        Task<List<CitizenHistoryDto>> GetCitizenHistoryAsync(string officialUserId, string cnp);
+        Task<bool> ResolveRequestAsync(Guid requestId, string officialUserId);
     }
 }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BusinessLayer.DTOs
 {
-    public interface UpdateInstitutionAdminDto
+    public class UpdateInstitutionAdminDto
     { 
         public string FullName { get; set; }
         public Guid? NewInstitutionId{ get; set;}

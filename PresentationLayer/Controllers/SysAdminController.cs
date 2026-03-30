@@ -132,5 +132,20 @@ namespace PresentationLayer.Controllers
 
             return Ok(new { Succes = true, Message="Institutia a fost actualizata cu succes" });
         }
+
+        [HttpGet("categories")]
+        public async Task<IActionResult> GetCategories()
+        {
+            try
+            {
+                // Zero cuplare cu baza de date! Controller-ul doar rutează.
+                var categories = await _sysAdminService.GetAllCategoriesAsync();
+                return Ok(categories);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "Eroare la aducerea categoriilor: " + ex.Message });
+            }
+        }
     }
 }

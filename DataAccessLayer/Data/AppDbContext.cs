@@ -28,6 +28,7 @@ namespace DataAccessLayer.Data
         public DbSet<DocumentRequest> DocumentRequests { get; set; }
 
         public DbSet<Institution> Institutions { get; set; }
+        public DbSet<DocumentCategory> DocumentCategories { get; set; }
 
         // Aici configurăm regulile speciale ale bazei de date
         protected override void OnModelCreating(ModelBuilder builder)

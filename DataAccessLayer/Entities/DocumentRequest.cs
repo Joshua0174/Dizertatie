@@ -50,6 +50,7 @@ namespace DataAccessLayer.Entities
         Pending,
         Approved,
         Rejected,
-        Expired
+        Expired, 
+        Resolved
     }
 }

@@ -15,5 +15,6 @@ namespace BusinessLayer.DTOs
         [Required] public string DocumentName{ get; set; }
 
         [Required] public Guid DocumentTypeId { get; set; }
+        public Guid? DocumentId { get; set; }
     }
 }

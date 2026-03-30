@@ -4,6 +4,7 @@ using DataAccessLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328100905_AddCategoryAndAllowMultipleToDocType")]
+    partial class AddCategoryAndAllowMultipleToDocType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -206,21 +209,6 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("CompetencyProfiles");
                 });
 
-            modelBuilder.Entity("DataAccessLayer.Entities.DocumentCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DocumentCategories");
-                });
-
             modelBuilder.Entity("DataAccessLayer.Entities.DocumentRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -276,8 +264,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<bool>("AllowMultiple")
                         .HasColumnType("bit");
 
-                    b.Property<Guid>("CategoryId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -297,8 +286,6 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CategoryId");
 
                     b.ToTable("DocumentTypes");
                 });
@@ -616,17 +603,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("DocumentType");
 
                     b.Navigation("Official");
-                });
-
-            modelBuilder.Entity("DataAccessLayer.Entities.DocumentType", b =>
-                {
-                    b.HasOne("DataAccessLayer.Entities.DocumentCategory", "Category")
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Category");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.OfficialProfile", b =>

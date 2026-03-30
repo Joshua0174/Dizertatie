@@ -36,17 +36,7 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                var docs = await _documentService.GetUserDocumentsAsync(GetCitizenId());
-
-                var dtoList = docs.Select(d => new CitizenDocumentDto
-                {
-                    Id = d.Id,
-                    Name = d.Name,
-                    DocumentTypeId = d.DocumentTypeId,
-                    FileType = d.FileType,
-                    UploadedDate = d.UploadedDate,
-                    FileHash = d.FileHash
-                }).ToList();
+                var dtoList = await _documentService.GetUserDocumentsAsync(GetCitizenId());
 
                 return Ok(dtoList);
             }
@@ -54,24 +44,21 @@ namespace PresentationLayer.Controllers
             catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
         }
 
+        // În PresentationLayer/Controllers/CitizenController.cs
+
         [HttpPost("upload")]
         public async Task<IActionResult> UploadDocument([FromForm] DocumentUploadDto model)
         {
+            // Validare de bază în Controller
             if (model.File == null || model.File.Length == 0)
-            {
                 return BadRequest(new { Message = "Nu ai selectat niciun fișier." });
-            }
 
             try
             {
-                var result = await _documentService.UploadDocumentAsync(
-                    GetCitizenId(),
-                    model.File,
-                    model.DocumentName,
-                    model.DocumentTypeId
-                );
+                var result = await _documentService.CreateDocumentAsync(GetCitizenId(), model);
 
-                return Ok(new
+                // Returnăm 201 Created conform standardelor REST
+                return CreatedAtAction(nameof(DownloadDocument), new { id = result.Id }, new
                 {
                     Id = result.Id,
                     Name = result.Name,
@@ -79,12 +66,34 @@ namespace PresentationLayer.Controllers
                     FileType = result.FileType,
                     BlockchainHash = result.FileHash,
                     Status = "Pending Blockchain",
-                    Message = "Document salvat, criptat și convertit în PDF cu succes!"
+                    Message = "Document încărcat și criptat cu succes!"
                 });
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); } // 409 Conflict pentru duplicate
             catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { Message = $"A apărut o eroare internă: {ex.Message}" }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = $"Eroare internă: {ex.Message}" }); }
+        }
+
+        [HttpPut("edit/{id}")]
+        public async Task<IActionResult> EditDocument(Guid id, [FromForm] DocumentEditDto model)
+        {
+            try
+            {
+                var result = await _documentService.EditDocumentAsync(id, GetCitizenId(), model);
+
+                return Ok(new
+                {
+                    Id = result.Id,
+                    Name = result.Name,
+                    BlockchainHash = result.FileHash,
+                    Message = "Document actualizat cu succes!"
+                });
+            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = $"Eroare internă: {ex.Message}" }); }
         }
 
         [HttpGet("download/{id}")]
@@ -162,15 +171,12 @@ namespace PresentationLayer.Controllers
         {
             try
             {
-                // 1. Apelăm serviciul (salvăm aprobarea/refuzul în baza de date și pornim cronometrul)
+                // 1. 'result' este acum DocumentRequestDto
                 var result = await _documentService.RespondToRequestAsync(dto, GetCitizenId());
 
-                // =========================================================
-                // 2. MAGIA SIGNALR: Notificăm instant funcționarul!
-                // =========================================================
+                // 2. Notificăm funcționarul (SignalR)
                 if (!string.IsNullOrEmpty(result.OfficialId))
                 {
-                    // MĂSURA DE SIGURANȚĂ: Ne asigurăm că ID-ul funcționarului este formatat cu litere mici
                     string targetGroup = result.OfficialId.ToLowerInvariant();
 
                     await _hubContext.Clients.Group(targetGroup).SendAsync(
@@ -178,19 +184,19 @@ namespace PresentationLayer.Controllers
                         new
                         {
                             RequestId = result.Id,
-                            NewStatus = result.Status.ToString(),
+                            NewStatus = result.Status, // <-- Fără .ToString()
                             Message = dto.IsApproved ? "Cetățeanul a acceptat cererea!" : "Cetățeanul a refuzat cererea."
                         }
                     );
                 }
 
-                // 3. Răspundem cu succes cetățeanului
+                // 3. Răspundem cu succes către Frontend-ul cetățeanului
                 return Ok(new
                 {
                     Message = dto.IsApproved
                         ? "Cererea a fost aprobată. Funcționarul are acum acces temporar la documentul tău."
                         : "Cererea a fost respinsă și funcționarul a fost notificat.",
-                    Status = result.Status.ToString()
+                    Status = result.Status // <-- Fără .ToString()
                 });
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
@@ -210,6 +216,23 @@ namespace PresentationLayer.Controllers
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
             catch (Exception ex) { return StatusCode(500, new { Message = "Eroare la obținerea statisticilor." }); }
+        }
+
+        // Adaugă acest endpoint în PresentationLayer/Controllers/CitizenController.cs
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteDocument(Guid id)
+        {
+            try
+            {
+                // Apelăm serviciul, care se ocupă de DB și Disk
+                await _documentService.DeleteDocumentAsync(id, GetCitizenId());
+
+                return Ok(new { Message = "Documentul a fost șters definitiv din portofelul tău." });
+            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { Message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { Message = $"Eroare internă: {ex.Message}" }); }
         }
     }
 }

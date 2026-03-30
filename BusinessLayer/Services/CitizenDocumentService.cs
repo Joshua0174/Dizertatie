@@ -19,13 +19,29 @@ namespace BusinessLayer.Services
             _context = context;
         }
 
-        public async Task<List<CitizenDocument>> GetUserDocumentsAsync(string userId)
+        // În CitizenDocumentService.cs
+        public async Task<List<CitizenDocumentDto>> GetUserDocumentsAsync(string userId)
         {
-            return await _context.CitizenDocuments
-                .AsNoTracking()
+            var docs = await _context.CitizenDocuments
                 .Include(d => d.DocumentType)
+                    .ThenInclude(dt => dt.Category) // <-- Aici e cheia pentru noua tabelă!
                 .Where(d => d.UserId == userId)
                 .ToListAsync();
+
+            // MAPAREA SE FACE AICI, ÎN BUSINESS LAYER
+            var dtoList = docs.Select(d => new CitizenDocumentDto
+            {
+                Id = d.Id,
+                Name = d.Name,
+                DocumentTypeId = d.DocumentTypeId,
+                FileType = d.FileType,
+                UploadedDate = d.UploadedDate,
+                FileHash = d.FileHash,
+                Category = d.DocumentType?.Category?.Name ?? "Altele", // Maparea sigură
+                AllowMultiple = d.DocumentType?.AllowMultiple ?? false
+            }).ToList();
+
+            return dtoList;
         }
 
         public async Task<CitizenDocument> GetDocumentByIdAsync(Guid documentId, string userId)
@@ -36,110 +52,125 @@ namespace BusinessLayer.Services
                 .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId);
         }
 
-        public async Task<CitizenDocument> UploadDocumentAsync(string userId, IFormFile file, string documentName, Guid documentTypeId)
+        // În BusinessLayer/Services/CitizenDocumentService.cs
+
+        public async Task<CitizenDocument> CreateDocumentAsync(string userId, DocumentUploadDto dto)
         {
-            // 1. Validări de bază
             if (string.IsNullOrEmpty(userId)) throw new ArgumentNullException(nameof(userId), "UserId invalid");
-            if (file == null || file.Length == 0) throw new ArgumentNullException(nameof(file), "Fișier gol");
 
-            // Verificăm dacă tipul de document ales chiar există
-            var typeExists = await _context.DocumentTypes.AnyAsync(t => t.Id == documentTypeId);
-            if (!typeExists) throw new ArgumentException("Tipul de document selectat nu este valid.");
+            // 1. Verificăm setările tipului de document
+            var documentTypeSettings = await _context.DocumentTypes
+                .Where(t => t.Id == dto.DocumentTypeId)
+                .Select(t => new { t.Id, t.AllowMultiple })
+                .FirstOrDefaultAsync();
 
-            // 2. CONVERSIE: Procesăm fișierul prin Helper-ul de PDF
-            byte[] pdfBytes;
-            try
+            if (documentTypeSettings == null)
+                throw new ArgumentException("Tipul de document selectat nu este valid.");
+
+            // 2. Regula strictă: Dacă NU permite duplicate, verificăm să nu existe deja!
+            if (!documentTypeSettings.AllowMultiple)
             {
-                pdfBytes = await PdfConversionHelper.ConvertToPdfAsync(file);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"Eroare la procesarea fișierului: {ex.Message}");
-            }
+                var existingDoc = await _context.CitizenDocuments
+                    .AnyAsync(d => d.UserId == userId && d.DocumentTypeId == dto.DocumentTypeId);
 
-            // 3. HASH: Calculăm amprenta digitală SHA256 (Esențial pentru Blockchain) pe PDF-ul curat
-            string hash;
-            using (var sha256 = System.Security.Cryptography.SHA256.Create())
-            {
-                var hashBytes = sha256.ComputeHash(pdfBytes);
-                hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-            }
-
-            // =====================================================================
-            // 4. LOGICA DE UPSERT: Căutăm dacă omul are deja acest tip de act
-            // =====================================================================
-            var existingDocument = await _context.CitizenDocuments
-                .FirstOrDefaultAsync(d => d.UserId == userId && d.DocumentTypeId == documentTypeId);
-
-            // Dacă există, îi refolosim ID-ul (pentru a suprascrie fișierul fizic). Altfel, generăm unul nou.
-            var documentId = existingDocument != null ? existingDocument.Id : Guid.NewGuid();
-
-            // 5. Pregătire stocare fizică
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", userId);
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
-
-            // Criptăm conținutul fișierului PDF cu AES-256
-            var encryptedBytes = EncryptionHelper.Encrypt(pdfBytes);
-
-            // Salvăm cu extensia .enc
-            var uniqueFileName = $"{documentId}.enc";
-            var fullPath = Path.Combine(folderPath, uniqueFileName);
-
-            // Dacă calea veche diferă de calea nouă din anumite motive, ștergem vechiul fișier.
-            // (De regulă va fi aceeași și WriteAllBytesAsync va face suprascriere automată)
-            if (existingDocument != null && !string.IsNullOrEmpty(existingDocument.FilePath) && existingDocument.FilePath != fullPath)
-            {
-                if (File.Exists(existingDocument.FilePath))
+                if (existingDoc)
                 {
-                    File.Delete(existingDocument.FilePath);
+                    throw new InvalidOperationException("Ai deja un document de acest tip încărcat. Te rugăm să folosești opțiunea de Editare pentru a-l actualiza.");
                 }
             }
 
-            // Scriem pe disk varianta CRIPTATĂ (dacă există deja fișierul, îl va suprascrie curat)
+            // 3. Procesare Fișier Nou
+            byte[] pdfBytes;
+            try { pdfBytes = await PdfConversionHelper.ConvertToPdfAsync(dto.File); }
+            catch (Exception ex) { throw new ArgumentException($"Eroare la procesarea fișierului: {ex.Message}"); }
+
+            // 4. Generare Hash și Criptare
+            string hash;
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                hash = BitConverter.ToString(sha256.ComputeHash(pdfBytes)).Replace("-", "").ToLowerInvariant();
+            }
+            var encryptedBytes = EncryptionHelper.Encrypt(pdfBytes);
+
+            // 5. Salvare Fizică
+            var documentId = Guid.NewGuid();
+            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", userId);
+            Directory.CreateDirectory(folderPath); // Va crea folderul doar dacă nu există
+            var fullPath = Path.Combine(folderPath, $"{documentId}.enc");
+
             await File.WriteAllBytesAsync(fullPath, encryptedBytes);
 
-            // =====================================================================
-            // 6. ACTUALIZARE SAU SALVARE ÎN BAZA DE DATE
-            // =====================================================================
-            if (existingDocument != null)
+            // 6. Salvare în Baza de Date
+            var document = new CitizenDocument
             {
-                // Update pe cel existent
-                existingDocument.Name = documentName;
-                existingDocument.FilePath = fullPath;
-                existingDocument.FileHash = hash;
-                existingDocument.FileType = "application/pdf";
-                existingDocument.UploadedDate = DateTime.UtcNow;
-                existingDocument.IsOnBlockChain = false; // Resetăm pt. că actul s-a schimbat!
+                Id = documentId,
+                UserId = userId,
+                DocumentTypeId = dto.DocumentTypeId,
+                Name = dto.DocumentName,
+                FilePath = fullPath,
+                FileHash = hash,
+                FileType = "application/pdf",
+                UploadedDate = DateTime.UtcNow,
+                IsOnBlockChain = false
+            };
 
+            await _context.CitizenDocuments.AddAsync(document);
+            await _context.SaveChangesAsync();
+
+            return document;
+        }
+
+        public async Task<CitizenDocument> EditDocumentAsync(Guid documentId, string userId, DocumentEditDto dto)
+        {
+            // 1. Căutăm documentul existent
+            var existingDocument = await _context.CitizenDocuments
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId);
+
+            if (existingDocument == null)
+                throw new KeyNotFoundException("Documentul specificat nu a fost găsit sau nu îți aparține.");
+
+            bool hasChanges = false;
+
+            // 2. Actualizăm Numele (dacă s-a trimis și e diferit)
+            if (!string.IsNullOrWhiteSpace(dto.DocumentName) && existingDocument.Name != dto.DocumentName)
+            {
+                existingDocument.Name = dto.DocumentName;
+                hasChanges = true;
+            }
+
+            // 3. Procesăm Noul Fișier (Dacă cetățeanul a încărcat unul nou)
+            if (dto.File != null && dto.File.Length > 0)
+            {
+                byte[] pdfBytes;
+                try { pdfBytes = await PdfConversionHelper.ConvertToPdfAsync(dto.File); }
+                catch (Exception ex) { throw new ArgumentException($"Eroare la procesarea fișierului: {ex.Message}"); }
+
+                string newHash;
+                using (var sha256 = System.Security.Cryptography.SHA256.Create())
+                {
+                    newHash = BitConverter.ToString(sha256.ComputeHash(pdfBytes)).Replace("-", "").ToLowerInvariant();
+                }
+
+                var encryptedBytes = EncryptionHelper.Encrypt(pdfBytes);
+
+                // Păstrăm același ID și aceeași cale, deci fișierul fizic .enc va fi suprascris curat
+                await File.WriteAllBytesAsync(existingDocument.FilePath, encryptedBytes);
+
+                // Actualizăm metadatele în entitate
+                existingDocument.FileHash = newHash;
+                existingDocument.UploadedDate = DateTime.UtcNow;
+                existingDocument.IsOnBlockChain = false; // Fișier modificat -> necesită o nouă validare Blockchain
+                hasChanges = true;
+            }
+
+            // 4. Salvăm modificările doar dacă s-a schimbat ceva
+            if (hasChanges)
+            {
                 _context.CitizenDocuments.Update(existingDocument);
                 await _context.SaveChangesAsync();
-
-                return existingDocument;
             }
-            else
-            {
-                // Insert pentru act nou
-                var document = new CitizenDocument
-                {
-                    Id = documentId,
-                    UserId = userId,
-                    DocumentTypeId = documentTypeId,
-                    Name = documentName,
-                    FilePath = fullPath,
-                    FileHash = hash,
-                    FileType = "application/pdf",
-                    UploadedDate = DateTime.UtcNow,
-                    IsOnBlockChain = false
-                };
 
-                await _context.CitizenDocuments.AddAsync(document);
-                await _context.SaveChangesAsync();
-
-                return document;
-            }
+            return existingDocument;
         }
 
         // ==============================================================================
@@ -164,12 +195,23 @@ namespace BusinessLayer.Services
                 .Select(r => new DocumentRequestResponseDto
                 {
                     Id = r.Id,
-                    CitizenEmail = r.Official.Email,
+
+                    CitizenEmail = r.Citizen.Email,
+                    // --- NOU: Extragem numele complet al cetățeanului ---
+                    CitizenName = r.Citizen.FullName,
+
+                    OfficialEmail = r.Official.Email,
+                    OfficialName = r.Official.FullName,
+
+                    InstitutionName = r.Official.Institution != null ? r.Official.Institution.Name : "Instituție Necunoscută",
+
                     DocumentName = r.DocumentType.Name,
                     Status = r.Status.ToString(),
                     Date = r.RequestDate,
                     RequestReason = r.RequestReason,
-                    RejectionReason = r.RejectionReason
+                    RejectionReason = r.RejectionReason,
+                    DocumentTypeId = r.DocumentTypeId,
+                    ResponseDate = r.ResponseDate
                 })
                 .ToListAsync();
 
@@ -182,9 +224,8 @@ namespace BusinessLayer.Services
             };
         }
 
-        public async Task<DocumentRequest> RespondToRequestAsync(RespondToRequestDto dto, string citizenUserId)
+        public async Task<DocumentRequestDto> RespondToRequestAsync(RespondToRequestDto dto, string citizenUserId)
         {
-            // Am inclus DocumentType pentru a putea afișa numele documentului în mesajul de eroare
             var request = await _context.DocumentRequests
                 .Include(r => r.DocumentType)
                 .FirstOrDefaultAsync(r => r.Id == dto.RequestId && r.CitizenId == citizenUserId);
@@ -192,26 +233,40 @@ namespace BusinessLayer.Services
             if (request == null) throw new KeyNotFoundException("Cererea nu a fost găsită sau nu îți aparține.");
             if (request.Status != RequestStatus.Pending) throw new InvalidOperationException("Această cerere a primit deja un răspuns.");
 
-            request.ResponseDate = DateTime.UtcNow; // Începe să ticăie cronometrul de 5 minute
+            request.ResponseDate = DateTime.UtcNow; // Cronometrul de acces
 
             if (dto.IsApproved)
             {
-                // 1. Căutăm documentul în portofelul cetățeanului
-                var existingDocument = await _context.CitizenDocuments
-                    .FirstOrDefaultAsync(d => d.UserId == citizenUserId && d.DocumentTypeId == request.DocumentTypeId);
+                CitizenDocument existingDocument = null;
 
-                if (existingDocument == null)
+                if (dto.SelectedDocumentId.HasValue && dto.SelectedDocumentId.Value != Guid.Empty)
                 {
-                    throw new InvalidOperationException($"Nu ai un document valid de tipul '{request.DocumentType.Name}' încărcat în cont. Te rugăm să îl încarci mai întâi în portofelul tău de documente.");
+                    existingDocument = await _context.CitizenDocuments
+                        .FirstOrDefaultAsync(d => d.Id == dto.SelectedDocumentId.Value
+                                               && d.UserId == citizenUserId
+                                               && d.DocumentTypeId == request.DocumentTypeId);
+
+                    if (existingDocument == null)
+                    {
+                        throw new InvalidOperationException("Documentul selectat nu este valid sau a fost șters.");
+                    }
+                }
+                else
+                {
+                    existingDocument = await _context.CitizenDocuments
+                        .FirstOrDefaultAsync(d => d.UserId == citizenUserId && d.DocumentTypeId == request.DocumentTypeId);
+
+                    if (existingDocument == null)
+                    {
+                        throw new InvalidOperationException($"Nu ai un document valid de tipul '{request.DocumentType.Name}' încărcat în cont.");
+                    }
                 }
 
-                // 2. Legăm cererea de fișierul deja existent și criptat
                 request.DocumentPath = existingDocument.FilePath;
                 request.Status = RequestStatus.Approved;
             }
             else
             {
-                // Fluxul de respingere
                 if (string.IsNullOrWhiteSpace(dto.RejectionReason))
                     throw new ArgumentException("Trebuie să oferi un motiv pentru refuz.");
 
@@ -220,7 +275,16 @@ namespace BusinessLayer.Services
             }
 
             await _context.SaveChangesAsync();
-            return request;
+
+            // ========================================================
+            // MAPAREA CĂTRE NOUA FORMĂ:
+            // ========================================================
+            return new DocumentRequestDto
+            {
+                Id = request.Id,
+                OfficialId = request.OfficialId,
+                Status = request.Status.ToString() // Transformăm Enum-ul în String aici
+            };
         }
         public async Task<CitizenStatsDto> GetCitizenStatsAsync(string citizenId)
         {
@@ -240,6 +304,45 @@ namespace BusinessLayer.Services
                 PendingRequests = pending,
                 ResolvedRequests = resolved
             };
+        }
+
+        // Adaugă această metodă în BusinessLayer/Services/CitizenDocumentService.cs
+
+        public async Task<bool> DeleteDocumentAsync(Guid documentId, string userId)
+        {
+            // 1. Găsim documentul și ne asigurăm că aparține utilizatorului curent
+            var document = await _context.CitizenDocuments
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId);
+
+            if (document == null)
+            {
+                throw new KeyNotFoundException("Documentul nu a fost găsit sau nu îți aparține.");
+            }
+
+            // Păstrăm calea fișierului pentru a-l șterge de pe disk
+            var filePath = document.FilePath;
+
+            // 2. Ștergem înregistrarea din baza de date
+            _context.CitizenDocuments.Remove(document);
+            await _context.SaveChangesAsync();
+
+            // 3. Ștergem fișierul fizic (.enc) de pe server
+            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                }
+                catch (Exception ex)
+                {
+                    // O bună practică: dacă baza de date s-a actualizat cu succes, 
+                    // dar fișierul fizic e blocat de un alt proces, nu "picăm" tot request-ul.
+                    // Aici ideal ar fi să loghezi eroarea într-un sistem de logging (ex: Serilog).
+                    Console.WriteLine($"Avertisment: Nu s-a putut șterge fișierul fizic la calea {filePath}. Eroare: {ex.Message}");
+                }
+            }
+
+            return true;
         }
     }
 }

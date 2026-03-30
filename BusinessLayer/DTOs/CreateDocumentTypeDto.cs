@@ -12,7 +12,12 @@ namespace BusinessLayer.DTOs
         [Required] public string Name { get; set; }
         public string Description { get; set; }
         [Required]
+        public Guid CategoryId { get; set; }
+
+        public bool AllowMultiple { get; set; }
+        [Required]
         public DateTime EffectiveDate { get; set; }
+
 
         public DateTime? ExpirationDate { get; set; }
     }

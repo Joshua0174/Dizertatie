@@ -13,15 +13,13 @@ namespace BusinessLayer.DTOs
         [Required]
         public Guid RequestId { get; set; }
 
-        // A zis DA sau a zis NU?
+        
         [Required]
         public bool IsApproved { get; set; }
 
-        // Fișierul efectiv (PDF/JPG). Folosim IFormFile pentru a-l putea salva pe disc.
-        // Este opțional (?) pentru că, dacă dă Reject, nu va încărca niciun fișier.
        
-
-        // Motivul refuzului. Completat doar dacă IsApproved este false.
         public string? RejectionReason { get; set; }
+
+        public Guid? SelectedDocumentId { get; set; }
     }
 }

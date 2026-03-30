@@ -24,11 +24,23 @@ namespace BusinessLayer.Services
 
         public async Task<DocumentType> CreateDocumentTypeAsync(CreateDocumentTypeDto dto)
         {
+            // Opțional, dar recomandat: Verificăm dacă ID-ul categoriei trimise chiar există
+            var categoryExists = await _context.DocumentCategories.AnyAsync(c => c.Id == dto.CategoryId);
+            if (!categoryExists)
+            {
+                throw new KeyNotFoundException("Categoria selectată nu există în sistem.");
+            }
+
             var newType = new DocumentType
             {
                 Id = Guid.NewGuid(),
                 Name = dto.Name,
                 Description = dto.Description,
+
+                // --- MAPAREA NOUĂ ---
+                CategoryId = dto.CategoryId,
+
+                AllowMultiple = dto.AllowMultiple,
                 EffectiveDate = dto.EffectiveDate,
                 ExpirationDate = dto.ExpirationDate,
                 isActive = true
@@ -36,6 +48,7 @@ namespace BusinessLayer.Services
 
             await _context.DocumentTypes.AddAsync(newType);
             await _context.SaveChangesAsync();
+
             return newType;
         }
 
@@ -199,6 +212,20 @@ namespace BusinessLayer.Services
             if (!result.Succeeded) throw new Exception(" Eroare la crearea contului");
 
             return true;
+        }
+
+        public async Task<IEnumerable<DocumentCategoryDto>> GetAllCategoriesAsync()
+        {
+            // Aici facem maparea din Entitate în DTO, fix unde îi este locul!
+            var categories = await _context.DocumentCategories
+                .Select(c => new DocumentCategoryDto
+                {
+                    Id = c.Id,
+                    Name = c.Name
+                })
+                .ToListAsync();
+
+            return categories;
         }
     }
 }

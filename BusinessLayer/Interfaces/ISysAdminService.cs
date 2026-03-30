@@ -30,5 +30,6 @@ namespace BusinessLayer.Interfaces
         Task<bool> UpdateInstitutionAsync(Guid id, EditInstitutionDto dto);
         Task<List<DocumentType>> GetAllDocumentTypesAsync();
         Task<bool> AssignNewAdminAsync(CreateNewAdminDto dto);
+        Task<IEnumerable<DocumentCategoryDto>> GetAllCategoriesAsync();
     }
 }
